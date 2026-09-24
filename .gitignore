@@ -1,0 +1,77 @@
+# CMake / Ninja build directories and generated metadata
+/build/
+/_build/
+/cmake-build-*/
+/Debug/
+/Release/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+build.ninja
+rules.ninja
+.ninja_deps
+.ninja_log
+compile_commands.json
+CMakeUserPresets.json
+
+# GCC / Keil compilation outputs (keep vendor libraries and source files)
+*.o
+*.obj
+*.d
+*.elf
+*.axf
+*.hex
+*.bin
+*.map
+*.lst
+*.su
+*.cyclo
+*.crf
+*.tra
+*.lnp
+*.__i
+*.dep
+*.plg
+*.iex
+
+# Keil generated output and user-specific session state
+/MDK-ARM/My_C/*
+!/MDK-ARM/My_C/*.jscope
+/MDK-ARM/Objects/
+/MDK-ARM/Listings/
+/MDK-ARM/DebugConfig/
+*.uvgui.*
+*.uvguix.*
+*.uvopt
+*.uvoptx
+*.uvproj.bak
+JLinkLog.txt
+JLinkSettings.ini
+*.cdb
+
+# Share portable VS Code configuration; ignore other local editor state
+/.vscode/*
+!/.vscode/settings.json
+!/.vscode/c_cpp_properties.json
+!/.vscode/launch.json
+!/.vscode/tasks.json
+!/.vscode/extensions.json
+.idea/
+.cache/
+*.swp
+*.swo
+*~
+
+# Logs, backups and OS metadata
+*.log
+*.bak
+*.Bak
+*.tmp
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Keep .clangd, .settings/ bundle metadata, .ioc, .mxproject, .uvprojx,
+# CMakeLists.txt, CMakePresets.json, cmake/, linker scripts and startup sources.
+# Do not ignore RTE/, all *.ini/*.htm files, or vendor *.a/*.lib libraries.

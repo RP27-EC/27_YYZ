@@ -105,3 +105,6 @@ Desktop.ini
 # STM32CubeMX generated files
 startup_stm32h723xx.s
 STM32H723VG_FLASH.ld
+
+# backup files
+_encoding_backup/

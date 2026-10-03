@@ -13,7 +13,7 @@
 #define __RP_MATH_H
 
 /* Includes ------------------------------------------------------------------*/
-#include "stm32f4xx_hal.h"
+#include "stm32h7xx_hal.h"
 
 /* Exported macro ------------------------------------------------------------*/
 #define ANGLE_TO_RAD 0.01745f

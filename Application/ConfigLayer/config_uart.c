@@ -5,7 +5,7 @@
 
 /**
   * @Name    USART1_rxDataHandler
-  * @brief   ÊÓ¾õÊı¾İ¸üĞÂ
+  * @brief   è§†è§‰æ•°æ®æ›´æ–°
 **/
 //void USART1_rxDataHandler(uint8_t *rxBuf)
 //{
@@ -14,12 +14,12 @@
 
 /**
   * @Name    USART3_rxDataHandler
-  * @brief   Ò£¿ØÆ÷¸üĞÂ
+  * @brief   é¥æ§å™¨æ›´æ–°
 **/
 void USART3_rxDataHandler(uint8_t *rxBuf)
 {
-	// ¸üĞÂÒ£¿ØÊı¾İ
-	rc_sensor.update(&rc_sensor, rxBuf);//½âÎöĞ­Òé
+	// æ›´æ–°é¥æ§æ•°æ®
+	rc_sensor.update(&rc_sensor, rxBuf);//è§£æåè®®
 	rc_sensor.check(&rc_sensor);
 }
 

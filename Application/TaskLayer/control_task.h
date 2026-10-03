@@ -3,8 +3,9 @@
 
 #include "cmsis_os.h"
 #include "main.h"
-#include "device.h"
+#include "imu_sensor.h"
 
+void Control_Init(void);
 void StartControlTask(void const * argument);
 
 

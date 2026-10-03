@@ -1,6 +1,6 @@
 /* Includes ------------------------------------------------------------------*/
 #include "imu_sensor.h"
-#include "drv_gpio.h"
+/* H723 chip select handling is in BMI088Middleware.c. */
 #include "drv_tick.h"
 
 #if IMU_USE_EKF == 1
@@ -59,7 +59,7 @@ imu_sensor_t imu_sensor = {
 float imu_read[3];
 uint8_t init_cnt = 200;
 /**
- * @brief  imu³õÊ¼»¯
+ * @brief  imuåˆå§‹åŒ–
  */
 void imu_init(struct imu_struct *self)
 {
@@ -68,19 +68,14 @@ void imu_init(struct imu_struct *self)
 	self->work_state.dev_state = DEV_OFFLINE;
 	self->work_state.init_code = BMI088_init();
 
-	while(self->work_state.init_code)
-	{
-		if (++self->work_state.err_cnt == init_cnt)
-		{
-			__set_FAULTMASK(1); 
-			NVIC_SystemReset();
-			break;
-		}
+    /* Keep a missing IMU inspectable instead of resetting the MCU forever. */
+    for (uint32_t attempt = 0; self->work_state.init_code && attempt < 2U; ++attempt)
+    {
+        ++self->work_state.err_cnt;
         self->work_state.err_code = IMU_INIT_ERR;
         self->work_state.init_code = BMI088_init();
-	}	
+    }
 
-	
 	if (self->work_state.init_code == 0)
 	{
 		self->work_state.dev_state = DEV_ONLINE;
@@ -89,12 +84,12 @@ void imu_init(struct imu_struct *self)
 		self->info->init_flag = 1;
 		
 #if IMU_USE_MAHONY == 1
-		/* Mahony³õÊ¼»¯ */
+		/* Mahonyåˆå§‹åŒ– */
 		transform_init(&gim_trans);
 #endif //IMU_USE_MAHONY
 		
 #if IMU_USE_EKF == 1
-		/* EKF³õÊ¼»¯ */
+		/* EKFåˆå§‹åŒ– */
 		transform_init(&EKFgim_trans);
 		// float init_quaternion[4] = {0.999019921, -0.0315267481, -0.0310692526};
 		float init_quaternion[4] = {0};
@@ -102,7 +97,7 @@ void imu_init(struct imu_struct *self)
 		IMU_QuaternionEKF_Init(init_quaternion, 10, 0.001, 8000000, 1);
 #endif //IMU_USE_EKF
 		
-		self->work_state.err_code = IMU_DATA_CALI;//¿ªÆôÍÓÂİÒÇĞ£ÕıÊ¹ÓÃIMU_DATA_CALI£¬¹Ø±ÕÊ¹ÓÃIMU_NONE_ERR
+		self->work_state.err_code = IMU_DATA_CALI;//å¼€å¯é™€èºä»ªæ ¡æ­£ä½¿ç”¨IMU_DATA_CALIï¼Œå…³é—­ä½¿ç”¨IMU_NONE_ERR
 		imu_sensor.info->offset_info.gx_offset = 0.f;
 		imu_sensor.info->offset_info.gy_offset = 0.f;
 		imu_sensor.info->offset_info.gz_offset = 0.f;
@@ -118,7 +113,7 @@ void imu_init(struct imu_struct *self)
 }
 
 /**
- * @brief  imuÊ§Áª¼ì²â
+ * @brief  imuå¤±è”æ£€æµ‹
  */
 void imu_heart_beat(work_state_t *heart)
 {
@@ -138,13 +133,13 @@ void imu_heart_beat(work_state_t *heart)
 }
 
 /**
- * @brief  imuÉèÖÃÎÂ¶È
+ * @brief  imuè®¾ç½®æ¸©åº¦
  */
 void imu_set_temperature(imu_sensor_t *self, float temp)
 {
 //	self->temp_pid->err = temp - imu_info.base_info.temperature;
 //	single_pid_ctrl(self->temp_pid);
-///* ÎÂ¶ÈÒì³£Öµ±£»¤ */
+///* æ¸©åº¦å¼‚å¸¸å€¼ä¿æŠ¤ */
 //	if(imu_info.base_info.temperature > 50 || imu_info.base_info.temperature < 0
 //		 || self->temp_pid->out < 0)
 //	{
@@ -157,7 +152,7 @@ void imu_set_temperature(imu_sensor_t *self, float temp)
 ave_filter_t imu_pitch_dif_speed_ave_filter;
 ave_filter_t imu_roll_dif_speed_ave_filter;
 ave_filter_t imu_yaw_dif_speed_ave_filter;
-/* ÁÙÊ±±äÁ¿ */
+/* ä¸´æ—¶å˜é‡ */
 static float pitch, roll, yaw;
 static float gyrox, gyroy, gyroz;
 static float accx, accy, accz;
@@ -166,7 +161,7 @@ static float accx_, accy_, accz_;
 static float gyro[3], accel[3], temp;
 static int16_t imu_cnt = 0;
 #if IMU_USE_EKF == 1
-// ²ÉÑùÊ±¼ä
+// é‡‡æ ·æ—¶é—´
 static float imu_dt;
 static uint32_t imu_tick_now, imu_tick_last;
 #endif
@@ -175,7 +170,7 @@ void imu_update(imu_sensor_t *imu_sen)
 
     imu_info_t *imu_info = imu_sen->info;
 	
-	/* »ñÈ¡ÍÓÂİÒÇÊı¾İ */
+	/* è·å–é™€èºä»ªæ•°æ® */
 	BMI088_read(gyro, accel, &temp);
 	
 	imu_info->raw_info.acc_x = accel[0];
@@ -185,11 +180,11 @@ void imu_update(imu_sensor_t *imu_sen)
 	imu_info->raw_info.gyro_y = gyro[1];
 	imu_info->raw_info.gyro_z = gyro[2];
 	
-	/* ×ø±êÏµ±ä»» */
+	/* åæ ‡ç³»å˜æ¢ */
 	Vector_Transform(gyro[0], gyro[1], gyro[2], accel[0], accel[1], accel[2],\
 	                 &gyrox, &gyroy, &gyroz, &accx, &accy, &accz);
 	
-	/* ÍÓÂİÒÇĞ£Õı */
+	/* é™€èºä»ªæ ¡æ­£ */
 	if (imu_sen->work_state.err_code == IMU_DATA_CALI)
 	{
 		if (imu_cnt < 2000)
@@ -217,7 +212,7 @@ void imu_update(imu_sensor_t *imu_sen)
 	{
 #if IMU_USE_EKF == 1
 
-			gyroz += imu_info->offset_info.gz_offset;//Ö»¶Ôgyroz×÷ĞŞÕı£¬x£¬yµÄ½ÇËÙ¶ÈÒÑ¾­ÔÚ½âËã¹ı³ÌÖĞÍê³ÉÁËĞ£Õı
+			gyroz += imu_info->offset_info.gz_offset;//åªå¯¹gyrozä½œä¿®æ­£ï¼Œxï¼Œyçš„è§’é€Ÿåº¦å·²ç»åœ¨è§£ç®—è¿‡ç¨‹ä¸­å®Œæˆäº†æ ¡æ­£
 #endif
 
 #if IMU_USE_MAHONY == 1
@@ -228,7 +223,7 @@ void imu_update(imu_sensor_t *imu_sen)
 	}
 	
 	
-	/* Ô­Ê¼Êı¾İµÍÍ¨ÂË²¨ */
+	/* åŸå§‹æ•°æ®ä½é€šæ»¤æ³¢ */
 	gyrox_ = Lowpass(gyrox_, gyrox, 1);
 	gyroy_ = Lowpass(gyroy_, gyroy, 1);
 	gyroz_ = Lowpass(gyroz_, gyroz, 1);
@@ -236,7 +231,7 @@ void imu_update(imu_sensor_t *imu_sen)
 	accy_ = Lowpass(accy_, accy, 0.2);
 	accz_ = Lowpass(accz_, accz, 0.2);
 	
-	/* ½âËãÍÓÂİÒÇÊı¾İ */
+	/* è§£ç®—é™€èºä»ªæ•°æ® */
 #if IMU_USE_MAHONY == 1
 	BMI_Get_EulerAngle(&imu_info->base_info.pitch, &imu_info->base_info.roll, &imu_info->base_info.yaw,\
 										 &gyrox_, &gyroy_, &gyroz_, \
@@ -244,19 +239,19 @@ void imu_update(imu_sensor_t *imu_sen)
 #endif
 
 #if IMU_USE_EKF == 1
-	// ¼ÆËã²ÉÑùÊ±¼ä
+	// è®¡ç®—é‡‡æ ·æ—¶é—´
 		imu_tick_now = micros();
-		if(imu_tick_last == 0) // µÚÒ»´ÎÌØÊâ´¦Àí
+		if(imu_tick_last == 0) // ç¬¬ä¸€æ¬¡ç‰¹æ®Šå¤„ç†
 		{
-			imu_tick_last = imu_tick_now - 1000; // ¼ä¸ô1ms
+			imu_tick_last = imu_tick_now - 1000; // é—´éš”1ms
 		}
 		imu_dt = (imu_tick_now - imu_tick_last) * 0.000001f; // us to s
 		imu_tick_last = imu_tick_now;
-		if(imu_dt > 1)//·ÀÖ¹ÏµÍ³¶¨Ê±Æ÷·¢ñ²¼ÆËã³öºÜ´óµÄÖµ
+		if(imu_dt > 1)//é˜²æ­¢ç³»ç»Ÿå®šæ—¶å™¨å‘ç™«è®¡ç®—å‡ºå¾ˆå¤§çš„å€¼
 		{
 			imu_dt = 0.001f;
 		}
-    // ºËĞÄº¯Êı,EKF¸üĞÂËÄÔªÊı
+    // æ ¸å¿ƒå‡½æ•°,EKFæ›´æ–°å››å…ƒæ•°
     IMU_QuaternionEKF_Update(gyrox, gyroy, gyroz, accx, accy, accz, imu_dt);
 
 		imu_info->base_info.yaw = QEKF_INS.Yaw;
@@ -264,13 +259,13 @@ void imu_update(imu_sensor_t *imu_sen)
     imu_info->base_info.roll = QEKF_INS.Roll;
     imu_info->base_info.yaw_total_angle = QEKF_INS.YawTotalAngle;
 #endif
-	/* »ñÈ¡ÊÀ½ç×ø±êÏµµÄ¼ÓËÙ¶È */						 
+	/* è·å–ä¸–ç•Œåæ ‡ç³»çš„åŠ é€Ÿåº¦ */						 
 	pitch = imu_info->base_info.pitch, roll = imu_info->base_info.roll, yaw = imu_info->base_info.yaw;
 	BMI_Get_Acceleration(pitch, roll, yaw,\
 											 accx_, accy_, accz_,\
 											 &imu_info->base_info.accx, &imu_info->base_info.accy, &imu_info->base_info.accz);
 	
-	/* ¼ÆËãÍÓÂİÒÇÊı¾İ */
+	/* è®¡ç®—é™€èºä»ªæ•°æ® */
 	//pitch
 	imu_info->base_info.rate_pitch = gyroy_ / (double)0.017453;
 	imu_info->base_info.ave_rate_pitch = ave_fil_update(&imu_pitch_dif_speed_ave_filter, imu_info->base_info.rate_pitch, 3);
@@ -285,7 +280,7 @@ void imu_update(imu_sensor_t *imu_sen)
 	
 	imu_sen->work_state.offline_cnt = 0;
 	
-	/* imu¶ÁÈ¡Êı¾İÅĞ¶Ï  */
+	/* imuè¯»å–æ•°æ®åˆ¤æ–­  */
 	if ((accel[0] == 0) && (accel[1] == 0) && (accel[2] == 0) \
 		 && (gyro[0] == 0) && (gyro[1] == 0) && (gyro[2]== 0))
 	{
@@ -298,19 +293,19 @@ void imu_update(imu_sensor_t *imu_sen)
 		}
 	}
 
-    /* imu»ñÈ¡ÎÂ¶È */
+    /* imuè·å–æ¸©åº¦ */
     imu_info->base_info.temperature = temp;
 
 }
 
 #if IMU_USE_EKF == 1
-// Ê¹ÓÃ¼ÓËÙ¶È¼ÆµÄÊı¾İ³õÊ¼»¯RollºÍPitch,¶øYawÖÃ0,ÕâÑù¿ÉÒÔ±ÜÃâÔÚ³õÊ¼Ê±ºòµÄ×ËÌ¬¹À¼ÆÎó²î
+// ä½¿ç”¨åŠ é€Ÿåº¦è®¡çš„æ•°æ®åˆå§‹åŒ–Rollå’ŒPitch,è€ŒYawç½®0,è¿™æ ·å¯ä»¥é¿å…åœ¨åˆå§‹æ—¶å€™çš„å§¿æ€ä¼°è®¡è¯¯å·®
 static void InitQuaternion(float *init_q4)
 {
     float acc_sum[3] = {0};
 	float gyro_init[3], acc_init[3];
 
-    // ¶ÁÈ¡100´Î¼ÓËÙ¶È¼ÆÊı¾İ,È¡Æ½¾ùÖµ×÷Îª³õÊ¼Öµ
+    // è¯»å–100æ¬¡åŠ é€Ÿåº¦è®¡æ•°æ®,å–å¹³å‡å€¼ä½œä¸ºåˆå§‹å€¼
     for (uint8_t i = 0; i < 100; ++i)
     {
 				BMI088_read(gyro_init, acc_init, &temp);

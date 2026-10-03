@@ -1,284 +1,108 @@
-/**
-  ******************************************************************************
-  * @file    drv_can.c
-  * @brief   CAN底层驱动
-  ******************************************************************************
-  * @attention
-  * 
-  * Copyright 2024 RobotPilots
-  ******************************************************************************
-  */
-/* Includes ------------------------------------------------------------------*/
+#include "main.h"
 #include "drv_can.h"
-
-/* Exported variables --------------------------------------------------------*/
-/* CAN 200/1FF发送数组 */
-uint8_t CAN1_200_DATA[8] = {0};
-uint8_t CAN1_1FF_DATA[8] = {0};
-uint8_t CAN1_2FF_DATA[8] = {0};
-uint8_t CAN2_200_DATA[8] = {0};
-uint8_t CAN2_1FF_DATA[8] = {0};
-uint8_t CAN2_2FF_DATA[8] = {0};
-
-/* Private function prototypes -----------------------------------------------*/
-void CAN1_rxDataHandler(uint32_t canId, uint8_t *rxBuf);
-void CAN2_rxDataHandler(uint32_t canId, uint8_t *rxBuf);
-
-/* Private variables ---------------------------------------------------------*/
-/**
-  * @brief CAN1\CAN2实例
-  */
-extern CAN_HandleTypeDef hcan1;
-extern CAN_HandleTypeDef hcan2;
-
-CAN_RxFrameTypeDef hcan1RxFrame;
-CAN_RxFrameTypeDef hcan2RxFrame;
-CAN_TxHeaderTypeDef CAN_TxHeadeType;
-/* Exported functions --------------------------------------------------------*/
-/**
-  * @brief  can接受中断，在stm32f4xx_hal_can.c内弱定义
-  * @param  
-  * @retval 
-  */
-void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
+#include "drv_status.h"
+#include "motor.h"
+FDCAN_HandleTypeDef hfdcan1;
+static int previous_tx_ok = 1;
+void HAL_FDCAN_MspInit(FDCAN_HandleTypeDef *can)
 {
-  
-  if(hcan == &hcan1)
-  {
-		HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &hcan1RxFrame.header, hcan1RxFrame.data);
-		
-		CAN1_rxDataHandler(hcan1RxFrame.header.StdId, hcan1RxFrame.data);
-  }
-  else if(hcan == &hcan2)
-  {
-		HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &hcan2RxFrame.header, hcan2RxFrame.data);
-		
-		CAN2_rxDataHandler(hcan2RxFrame.header.StdId, hcan2RxFrame.data);
-  }
-  else 
-  {
-    return;
-  }
-}
-
-/**
-  * @brief  发送CAN1数据帧200
-  * @param  
-  * @retval 
-  */
-void CAN1_CMD_200()
-{
-	CAN_TxHeaderTypeDef tx_message;
-	
-	uint32_t send_mail_box;
-	tx_message.StdId = 0x200;
-	tx_message.IDE = CAN_ID_STD;
-	tx_message.RTR = CAN_RTR_DATA;
-	tx_message.DLC = 0x08;
-
-	HAL_CAN_AddTxMessage(&hcan1, &tx_message, CAN1_200_DATA, &send_mail_box);
-}
-
-/**
-  * @brief  发送CAN2数据帧200
-  * @param  
-  * @retval 
-  */
-void CAN2_CMD_200()
-{
-	CAN_TxHeaderTypeDef tx_message;
-	
-	uint32_t send_mail_box;
-	tx_message.StdId = 0x200;
-	tx_message.IDE = CAN_ID_STD;
-	tx_message.RTR = CAN_RTR_DATA;
-	tx_message.DLC = 0x08;
-
-	HAL_CAN_AddTxMessage(&hcan2, &tx_message, CAN2_200_DATA, &send_mail_box);
-}
-
-/**
-  * @brief  发送CAN1数据帧1FF
-  * @param  
-  * @retval 
-  */
-void CAN1_CMD_1FF()
-{
-	CAN_TxHeaderTypeDef tx_message;
-	
-	uint32_t send_mail_box;
-	tx_message.StdId = 0x1FF;
-	tx_message.IDE = CAN_ID_STD;
-	tx_message.RTR = CAN_RTR_DATA;
-	tx_message.DLC = 0x08;
-
-	HAL_CAN_AddTxMessage(&hcan1, &tx_message, CAN1_1FF_DATA, &send_mail_box);
-}
-
-/**
-  * @brief  发送CAN2数据帧1FF
-  * @param  
-  * @retval 
-  */
-void CAN2_CMD_1FF()
-{
-	CAN_TxHeaderTypeDef tx_message;
-	
-	uint32_t send_mail_box;
-	tx_message.StdId = 0x1FF;
-	tx_message.IDE = CAN_ID_STD;
-	tx_message.RTR = CAN_RTR_DATA;
-	tx_message.DLC = 0x08;
-
-	HAL_CAN_AddTxMessage(&hcan2, &tx_message, CAN2_1FF_DATA, &send_mail_box);
-}
-
-/**
-  * @brief  int16类型数组转换为uint8类型数组
-  * @param  uint8_t: *data
-  * @param  int16_t: *dat
-  * @retval None
-  */
-void int16_to_uint8(uint8_t *data, int16_t *dat)
-{
-	data[0] = (uint8_t)((int16_t)dat[0] >> 8);
-	data[1] = (uint8_t)((int16_t)dat[0]);
-	data[2] = (uint8_t)((int16_t)dat[1] >> 8);
-	data[3] = (uint8_t)((int16_t)dat[1]);
-	data[4] = (uint8_t)((int16_t)dat[2] >> 8);
-	data[5] = (uint8_t)((int16_t)dat[2]);
-	data[6] = (uint8_t)((int16_t)dat[3] >> 8);
-	data[7] = (uint8_t)((int16_t)dat[3]);			
-}
-
-/**
- * @brief  CAN数组自己定义，发送数据	 
- * @param  hcan1: CAN_HandleTypeDef
- * @param  CAN_DATA: 数据指针
- * @param  StdId: 标准ID
- * @retval
- */
-void CAN1_SendData(uint32_t StdId, uint8_t *CAN_DATA)
-{
-	uint32_t send_mail_box;
-	
-	CAN_TxHeaderTypeDef tx_message;
-	tx_message.IDE = CAN_ID_STD;
-	tx_message.RTR = CAN_RTR_DATA;
-	tx_message.DLC = 0x08;
-	tx_message.StdId = StdId;
-	
-	HAL_CAN_AddTxMessage(&hcan1, &tx_message, CAN_DATA, &send_mail_box);
-}
-
-/**
- * @brief  CAN数组自己定义，发送数据	 
- * @param  hcan2: CAN_HandleTypeDef
- * @param  CAN_DATA: 数据指针
- * @param  StdId: 标准ID
- * @retval
- */
-void CAN2_SendData(uint32_t StdId, uint8_t *CAN_DATA)
-{
-	uint32_t send_mail_box;
-	
-	CAN_TxHeaderTypeDef tx_message;
-	tx_message.IDE = CAN_ID_STD;
-	tx_message.RTR = CAN_RTR_DATA;
-	tx_message.DLC = 0x08;
-	tx_message.StdId = StdId;
-	
-	HAL_CAN_AddTxMessage(&hcan2, &tx_message, CAN_DATA, &send_mail_box);
-}
-
-/**
-  * @brief  CAN发送数据
-  * @param  hcan: CAN_HandleTypeDef
-  * @param  stdId: 标准ID
-  * @param  dat: 数组指针
-  * @retval HAL_StatusTypeDef
-  */
-HAL_StatusTypeDef CAN_SendData(CAN_HandleTypeDef *hcan, uint32_t stdId, uint8_t *dat)
-{
-	CAN_TxHeaderTypeDef pHeader;
-	uint32_t txMailBox;
-	
-	if((hcan->Instance != CAN1)&&(hcan->Instance != CAN2))
-	{
-		return HAL_ERROR;
-	}
-	
-	pHeader.StdId = stdId;
-	pHeader.IDE = CAN_ID_STD;
-	pHeader.RTR = CAN_RTR_DATA;
-	pHeader.DLC = 8;
-	
-	if(HAL_CAN_AddTxMessage(hcan, &pHeader, dat, &txMailBox) != HAL_OK)
-	{
-		return HAL_ERROR;
-	}
-	
-	return HAL_OK;
-	
-}
-/* rxData Handler [Weak] functions -------------------------------------------*/
-/**
- *  @brief  [__WEAK] 需要在Protocol Layer中实现具体的 CAN1 处理协议
- */
-__WEAK void CAN1_rxDataHandler(uint32_t rxId, uint8_t *rxBuf)
-{
-}
-
-/**
- *  @brief  [__WEAK] 需要在Protocol Layer中实现具体的 CAN2 处理协议
- */
-__WEAK void CAN2_rxDataHandler(uint32_t rxId, uint8_t *rxBuf)
-{
-}
-
-/**
- *  @brief  初始化CAN发送的ID等配置
- */
-void HAL_CAN_TxHeadeInit(uint16_t ID)
-{
-	CAN_TxHeadeType.StdId = ID;
-	CAN_TxHeadeType.ExtId = 0x0000;
-	CAN_TxHeadeType.DLC = 8;
-	CAN_TxHeadeType.IDE = CAN_ID_STD;
-	CAN_TxHeadeType.RTR = CAN_RTR_DATA;
+    if (can->Instance != FDCAN1) { return; }
+    __HAL_RCC_FDCAN_CLK_ENABLE();
+    __HAL_RCC_GPIOD_CLK_ENABLE();
+    GPIO_InitTypeDef pin = {0};
+    pin.Pin = GPIO_PIN_0 | GPIO_PIN_1;
+    pin.Mode = GPIO_MODE_AF_PP;
+    pin.Pull = GPIO_NOPULL;
+    pin.Speed = GPIO_SPEED_FREQ_HIGH;
+    pin.Alternate = GPIO_AF9_FDCAN1;
+    HAL_GPIO_Init(GPIOD, &pin);
+    HAL_NVIC_SetPriority(FDCAN1_IT0_IRQn, 6, 0);
+    HAL_NVIC_EnableIRQ(FDCAN1_IT0_IRQn);
 }
 
 
-/**
-  * @brief  CAN滤波器初始化
-  * @param  
-  * @retval 
-  */
-void CAN_Filter_Init(void)
+void Drv_CAN_Init(void)
 {
-	HAL_CAN_Init(&hcan1);
-	HAL_CAN_Init(&hcan2);
-	
-	CAN_FilterTypeDef can_filter_st;
-	can_filter_st.FilterFIFOAssignment = CAN_RX_FIFO0;	//使用FIFO0
-	can_filter_st.FilterActivation = ENABLE;			//使能滤波器
-	can_filter_st.FilterMode = CAN_FILTERMODE_IDMASK;	//设置滤波器模式
-	can_filter_st.FilterScale = CAN_FILTERSCALE_32BIT;	//设置比特数
-    can_filter_st.FilterIdHigh = 0x0000;				//高位ID
-	can_filter_st.FilterIdLow = 0x0000;					//低位ID
-	can_filter_st.FilterMaskIdHigh = 0x0000;			//高位掩码
-	can_filter_st.FilterMaskIdLow = 0x0000;				//低位掩码 注：此配置下没有过滤功能
-	
-	can_filter_st.FilterBank = 0;						//CAN1 过滤器组设置
-	can_filter_st.SlaveStartFilterBank = 14;			//CAN2 起始过滤器组设置，CAN2是CAN1的Slaver
-	HAL_CAN_ConfigFilter(&hcan1,&can_filter_st);		//应用配置到CAN1
-	HAL_CAN_Start(&hcan1);								//启动CAN1
-	/*使能CAN1中断*/
-	HAL_CAN_ActivateNotification(&hcan1, CAN_IT_RX_FIFO0_MSG_PENDING);
-	
-	can_filter_st.FilterBank = 14;						//CAN2 过滤器组设置
-	HAL_CAN_ConfigFilter(&hcan2,&can_filter_st);		//应用配置到CAN2
-	HAL_CAN_Start(&hcan2);								//启动CAN2
-	/*使能CAN2中断*/
-	HAL_CAN_ActivateNotification(&hcan2, CAN_IT_RX_FIFO0_MSG_PENDING);
+    hfdcan1.Instance = FDCAN1;
+    hfdcan1.Init.FrameFormat = FDCAN_FRAME_CLASSIC;
+    hfdcan1.Init.Mode = FDCAN_MODE_NORMAL;
+    hfdcan1.Init.AutoRetransmission = DISABLE; /* Never queue/replay old motor commands. */
+    hfdcan1.Init.NominalPrescaler = 5;
+    hfdcan1.Init.NominalSyncJumpWidth = 2;
+    hfdcan1.Init.NominalTimeSeg1 = 13;
+    hfdcan1.Init.NominalTimeSeg2 = 2; /* 80 MHz / 5 / (1+13+2) = 1 Mbit/s. */
+    hfdcan1.Init.DataPrescaler = 5;
+    hfdcan1.Init.DataSyncJumpWidth = 2;
+    hfdcan1.Init.DataTimeSeg1 = 13;
+    hfdcan1.Init.DataTimeSeg2 = 2;
+    hfdcan1.Init.StdFiltersNbr = 1;
+    hfdcan1.Init.RxFifo0ElmtsNbr = 16;
+    hfdcan1.Init.RxFifo0ElmtSize = FDCAN_DATA_BYTES_8;
+    hfdcan1.Init.TxFifoQueueElmtsNbr = 1;
+    hfdcan1.Init.TxFifoQueueMode = FDCAN_TX_FIFO_OPERATION;
+    hfdcan1.Init.TxElmtSize = FDCAN_DATA_BYTES_8;
+    if (HAL_FDCAN_Init(&hfdcan1) != HAL_OK) { Error_Handler(); }
+    FDCAN_FilterTypeDef filter = {0};
+    filter.IdType = FDCAN_STANDARD_ID;
+    filter.FilterType = FDCAN_FILTER_RANGE;
+    filter.FilterConfig = FDCAN_FILTER_TO_RXFIFO0;
+    filter.FilterID1 = 0x201;
+    filter.FilterID2 = 0x204;
+    if (HAL_FDCAN_ConfigFilter(&hfdcan1, &filter) != HAL_OK ||
+        HAL_FDCAN_ConfigGlobalFilter(&hfdcan1, FDCAN_REJECT, FDCAN_REJECT,
+                                    FDCAN_REJECT_REMOTE, FDCAN_REJECT_REMOTE) != HAL_OK ||
+        HAL_FDCAN_Start(&hfdcan1) != HAL_OK ||
+        HAL_FDCAN_ActivateNotification(&hfdcan1, FDCAN_IT_RX_FIFO0_NEW_MESSAGE, 0) != HAL_OK) {
+        Error_Handler();
+    }
+}
+
+void FDCAN1_IT0_IRQHandler(void) { HAL_FDCAN_IRQHandler(&hfdcan1); }
+void HAL_FDCAN_RxFifo0Callback(FDCAN_HandleTypeDef *can, uint32_t flags)
+{
+    (void)flags;
+    if (can != &hfdcan1) { return; }
+    FDCAN_RxHeaderTypeDef header;
+    uint8_t data[64];
+    while (HAL_FDCAN_GetRxFifoFillLevel(can, FDCAN_RX_FIFO0)) {
+        if (HAL_FDCAN_GetRxMessage(can, FDCAN_RX_FIFO0, &header, data) != HAL_OK) { break; }
+        if (header.IdType != FDCAN_STANDARD_ID || header.RxFrameType != FDCAN_DATA_FRAME ||
+            header.FDFormat != FDCAN_CLASSIC_CAN || header.DataLength != FDCAN_DLC_BYTES_8) { continue; }
+        Motor_Receive(header.Identifier, data, 8, HAL_GetTick());
+    }
+}
+int Drv_CAN_Ready(void)
+{
+    FDCAN_ProtocolStatusTypeDef status = {0};
+    int can_ok = HAL_FDCAN_GetProtocolStatus(&hfdcan1, &status) == HAL_OK;
+    mec_io.can_bus_off = status.BusOff;
+    mec_io.can_error_passive = status.ErrorPassive;
+    mec_io.can_last_error = status.LastErrorCode;
+    return can_ok && !status.BusOff && !status.ErrorPassive && previous_tx_ok;
+}
+void CAN_Send(void)
+{
+    /* Listen until the first feedback; preserve the existing no-backlog policy. */
+    if (!Motor_HasFeedback()) { return; }
+    /* No backlog: cancel a previous pending frame before accepting another. */
+    if (hfdcan1.Instance->TXBRP) {
+        HAL_FDCAN_AbortTxRequest(&hfdcan1, hfdcan1.Instance->TXBRP);
+        previous_tx_ok = 0;
+        ++mec_io.tx_errors;
+        return;
+    }
+    uint8_t data[8];
+    Motor_PackCurrent(data);
+    FDCAN_TxHeaderTypeDef tx = {0};
+    tx.Identifier = 0x200;
+    tx.IdType = FDCAN_STANDARD_ID;
+    tx.TxFrameType = FDCAN_DATA_FRAME;
+    tx.DataLength = FDCAN_DLC_BYTES_8;
+    tx.ErrorStateIndicator = FDCAN_ESI_ACTIVE;
+    tx.BitRateSwitch = FDCAN_BRS_OFF;
+    tx.FDFormat = FDCAN_CLASSIC_CAN;
+    tx.TxEventFifoControl = FDCAN_NO_TX_EVENTS;
+    previous_tx_ok = HAL_FDCAN_AddMessageToTxFifoQ(&hfdcan1, &tx, data) == HAL_OK;
+    if (previous_tx_ok) { ++mec_io.tx_queued; }
+    else { ++mec_io.tx_errors; }
 }

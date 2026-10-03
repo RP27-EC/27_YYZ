@@ -58,7 +58,7 @@ osThreadId LedTaskHandle;
 void StartControlTask(void const * argument);
 void StartLedTask(void const * argument);
 
-extern void MX_USB_DEVICE_Init(void);
+/* USB CDC belongs to the archived F4 board configuration. */
 void MX_FREERTOS_Init(void); /* (MISRA C 2004 rule 8.1) */
 
 /* GetIdleTaskMemory prototype (linked to static allocation support) */
@@ -131,7 +131,7 @@ void MX_FREERTOS_Init(void) {
 __weak void StartControlTask(void const * argument)
 {
   /* init code for USB_DEVICE */
-  MX_USB_DEVICE_Init();
+  /* No board-specific USB initialization in this task. */
   /* USER CODE BEGIN StartControlTask */
   /* Infinite loop */
   for(;;)

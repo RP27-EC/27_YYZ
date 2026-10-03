@@ -2,7 +2,7 @@
 #define __RP_DEVICE_CONFIG_H
 
 /* Includes ------------------------------------------------------------------*/
-#include "stm32f4xx_hal.h"
+#include "stm32h7xx_hal.h"
 #include "stdbool.h"
 #include "rp_driver_config.h"
 

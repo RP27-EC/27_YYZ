@@ -3,21 +3,21 @@
 #define __RP_CONFIG_H
 
 /* Includes ------------------------------------------------------------------*/
-#include "stm32f4xx_hal.h"
+#include "stm32h7xx_hal.h"
 #include "stdbool.h"
 #include "string.h"
-// Çı¶¯²ãÅäÖÃ
+// é©±åŠ¨å±‚é…ç½®
 #include "rp_driver_config.h"
-// Éè±¸²ãÅäÖÃ
+// è®¾å¤‡å±‚é…ç½®
 #include "rp_device_config.h"
-// ÓÃ»§²ãÅäÖÃ
+// ç”¨æˆ·å±‚é…ç½®
 #include "rp_user_config.h"
 
 /* Exported macro ------------------------------------------------------------*/
 
-/*Ñ¡ÔñIMU½âËãËã·¨ÎªMahony*/
+/*é€‰æ‹©IMUè§£ç®—ç®—æ³•ä¸ºMahony*/
 #define IMU_USE_MAHONY  1
-/*Ñ¡ÔñIMU½âËãËã·¨ÎªEKF*/
+/*é€‰æ‹©IMUè§£ç®—ç®—æ³•ä¸ºEKF*/
 #define IMU_USE_EKF 	0
 
 

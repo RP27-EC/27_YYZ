@@ -1,6 +1,6 @@
 #include "crc.h"
 #include "stdbool.h"
-// 裁判系统官方CRC校验
+// 瑁佸垽绯荤粺瀹樻柟CRC鏍￠獙
 // crc8 generator polynomial:G(x)=x8+x5+x4+1
 
 const uint8_t CRC8_INIT = 0xff;
@@ -74,7 +74,7 @@ uint16_t Get_CRC16_Check_Sum(uint8_t *pchMessage,uint32_t dwLength,uint16_t wCRC
 
 
 
-/* CRC校验 */
+/* CRC鏍￠獙 */
 
 uint8_t Get_CRC8_Check_Sum( uint8_t *pchMessage, uint16_t dwLength, uint8_t ucCRC8 )
 {

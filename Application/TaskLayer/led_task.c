@@ -1,17 +1,13 @@
 #include "led_task.h"
-
-/* 记录 LED 翻转次数 */
-volatile uint32_t led_task_count = 0;
-
+volatile uint32_t led_task_count;
+volatile uint32_t led_task_heartbeat;
 void StartLedTask(void const *argument)
 {
     (void)argument;
-
-    for (;;)
-    {
-        // 翻转蓝灯状态
-        HAL_GPIO_TogglePin(LED_PORT, LED_BLUE_PIN);
-        led_task_count++;
+    for (;;) {
+        /* The F4 PH10 LED is not a verified LED on DM-MC02. */
+        led_task_heartbeat ^= 1U;
+        ++led_task_count;
         osDelay(500);
     }
 }

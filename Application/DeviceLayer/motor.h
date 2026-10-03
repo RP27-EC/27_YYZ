@@ -1,39 +1,32 @@
-#ifndef __MOTOR_H
-#define __MOTOR_H
-
-#include "rp_config.h"
-#include "can_protocol.h"
-#include "rm_motor.h"
-#include "KT_motor.h"
-#include "HT_motor.h"
-#include "DM_motor.h"
-#include "motor_def.h"
-#include "drv_can.h"
-
-/*电机定义步骤------------------------------------------------*/
-//如果要增删改RM电机
-//1.rm_motor_driver添加电机ID、CAN类型 
-//2.dev_rm_motor_list_e里加电机名字
-//3.CAN1_rxDataHandler，CAN2_rxDataHandler里添加获取电机信息的函数
-//4.rm_motor_t rm_motor[]数组里加电机总结构体
-//5.定义pid结构体以及在rm_motor_list_init里用mo tor_pid_init初始化pid结构体
-//如果要驱动电机就在motor_out里赋值，由CAN_Send统一发送
-/*电机ID宏定义------------------------------------------------*/
-#define ID_GIMB_P 		0x206 //0x1FF  23
-#define ID_GIMB_YAW 	0x142
-
-extern  KT_motor_t kt_motor[1];
-extern  Motor_HT_t L_Wheel;
-extern  Motor_DM_t Yaw_Motor;
-extern  Motor_RM_t R_Fric;
-extern  Motor_RM_Group_t RM_Group;
-/* Exported functions --------------------------------------------------------*/
-void rm_motor_list_init(void);
-void rm_motor_list_heart_beat(void);
-void kt_motor_list_init(void);
-void ht_motor_list_init(void);
-void dm_motor_list_init(void);
-uint8_t rm_motor_list_workstate(void);
-
+#ifndef DOWN_MOTOR_H
+#define DOWN_MOTOR_H
+#include "chassis_config.h"
+#define ID_CHAS_LF 0x201U
+#define ID_CHAS_RF 0x202U
+#define ID_CHAS_LB 0x203U
+#define ID_CHAS_RB 0x204U
+typedef struct {
+    uint16_t angle;
+    int16_t speed, current;
+    uint8_t temperature;
+    uint32_t frames, last_ms;
+} rm_motor_info_t;
+typedef struct {
+    float target_speed, integral;
+    int16_t motor_out;
+} rm_motor_base_info_t;
+typedef struct {
+    rm_motor_info_t *info;
+    uint16_t rx_id;
+    rm_motor_base_info_t base_info;
+} rm_motor_t;
+extern rm_motor_info_t rm_motor_info[CHAS_MOTOR_COUNT];
+extern rm_motor_t rm_motor[CHAS_MOTOR_COUNT];
+void Motor_Init(void);
+void Motor_Update(void);
+int Motor_Receive(uint32_t can_id, const uint8_t *data, uint32_t size, uint32_t now_ms);
+/* Online mask bits follow IDs 0x201..0x204, independently of enum indices. */
+uint8_t Motor_OnlineMask(uint32_t now_ms);
+int Motor_HasFeedback(void);
+void Motor_PackCurrent(uint8_t out[8]);
 #endif
-

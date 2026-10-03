@@ -18,9 +18,9 @@ void ave_fil_init(ave_filter_t *ave_fil)
 }
 
 /**
- * @brief »¬¶¯´°¿Ú¾ùÖµÂË²¨
- * @param Ö±½Ó¶¨Òå¾ùÖµÂË²¨½á¹¹Ìå£¬ÊäÈëµÄÖµ£¬´°¿ÚÊı×é³¤¶È
- * @result ¾ùÖµ
+ * @brief æ»‘åŠ¨çª—å£å‡å€¼æ»¤æ³¢
+ * @param ç›´æ¥å®šä¹‰å‡å€¼æ»¤æ³¢ç»“æ„ä½“ï¼Œè¾“å…¥çš„å€¼ï¼Œçª—å£æ•°ç»„é•¿åº¦
+ * @result å‡å€¼
  */
  
 float ave_fil_update(ave_filter_t *ave_fil, float value, uint16_t max)

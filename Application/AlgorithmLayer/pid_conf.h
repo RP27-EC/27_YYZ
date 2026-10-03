@@ -2,7 +2,7 @@
 #define __PID_CONF_H
 
 
-// M3508电机PID参数
+// M3508鐢垫満PID鍙傛暟
 //#define CHAS_SP_MAX_OUT 12000.0f
 #define CHAS_SP_MAX_INTEGRAL 6000.0f
 #define CHAS_SP_MAX_I_OUT 6000.0f
@@ -40,7 +40,7 @@
 #define SHOOT_AG_KI 0.0f
 #define SHOOT_AG_KD 0.0f
 
-// GM6020电机PID参数
+// GM6020鐢垫満PID鍙傛暟
 #define GIM_SP_MAX_OUT 25000.0f
 #define GIM_SP_MAX_INTEGRAL 8000.0f
 #define GIM_SP_MAX_I_OUT 10000.0f
@@ -48,7 +48,7 @@
 #define GIM_AG_MAX_INTEGRAL 10000.0f
 #define GIM_AG_MAX_I_OUT 6000.0f
 
-// machine模式
+// machine妯″紡
 #define YAW_MACHINE_SP_KP 350.0f//50.0f
 #define YAW_MACHINE_SP_KI 1.f//2.0f
 #define YAW_MACHINE_SP_KD 0.0f
@@ -63,7 +63,7 @@
 #define PITCH_MACHINE_AG_KI 0.0f
 #define PITCH_MACHINE_AG_KD 0.0f
 
-// gyro模式
+// gyro妯″紡
 #define YAW_GYRO_SP_KP 500.0f//1000.0f
 #define YAW_GYRO_SP_KI 2.f//10.0f
 #define YAW_GYRO_SP_KD 0.0f
@@ -79,7 +79,7 @@
 #define PITCH_GYRO_AG_KD 0.0f
 
 
-// M2006电机pid参数
+// M2006鐢垫満pid鍙傛暟
 #define DIAL_SP_MAX_OUT 10000.0f
 #define DIAL_SP_MAX_INTEGRAL 10000.0f
 #define DIAL_SP_MAX_I_OUT 6000.0f

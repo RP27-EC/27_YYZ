@@ -6,7 +6,7 @@
  * @update
  *              v1.0(11-September-2020)
  *              v1.1(13-November-2021)
- *                  1.Ôö¼ÓÎ»²Ù×÷º¯Êý
+ *                  1.å¢žåŠ ä½æ“ä½œå‡½æ•°
  */
 
 /* Includes ------------------------------------------------------------------*/
@@ -21,9 +21,9 @@
 /* Exported functions --------------------------------------------------------*/
 
 /**
- * @brief  µÍÍ¨ÂË²¨,K¡Ê(0,1)£¬K Ô½´ó£¬ÂË²¨Ð§¹ûÔ½Èõ
- * @param  ÉÏ´ÎµÄÂË²¨Êä³öX_last  £¬ÐÂµÄÊäÈëX_new £¬ÂË²¨ÏµÊýK
- * @return  ÂË²¨ºóÊýÖµ
+ * @brief  ä½Žé€šæ»¤æ³¢,Kâˆˆ(0,1)ï¼ŒK è¶Šå¤§ï¼Œæ»¤æ³¢æ•ˆæžœè¶Šå¼±
+ * @param  ä¸Šæ¬¡çš„æ»¤æ³¢è¾“å‡ºX_last  ï¼Œæ–°çš„è¾“å…¥X_new ï¼Œæ»¤æ³¢ç³»æ•°K
+ * @return  æ»¤æ³¢åŽæ•°å€¼
  */
 float Lowpass(float X_last, float X_new, float K)
 {
@@ -31,7 +31,7 @@ float Lowpass(float X_last, float X_new, float K)
 }
 
 /**
- *	@brief	¹ý°ëÈ¦´¦Àí angle£ºÔ´Êý¾Ý cycle:Êý¾Ý·¶Î§
+ *	@brief	è¿‡åŠåœˆå¤„ç† angleï¼šæºæ•°æ® cycle:æ•°æ®èŒƒå›´
  */
 float motor_half_cycle(float angle, float max)
 {
@@ -102,16 +102,16 @@ float DeathZoom(float input, float center, float death)
 }
 /**
   * @name   Time_Trigger_inloop
-  * @brief  ÔÚÑ­»·Àï¶¨Ê±´¥·¢
-  * @note   ¢ÙÐèÒªÍâ²¿¶¨Òå±äÁ¿´æÊ±¼ä¡¢µÚÒ»´Î²»Ö±½Ó´¥·¢±êÖ¾Î»,·ÀÖ¹¶à´¦µ÷ÓÃ¹²ÓÃÊ±¼ä»ò±êÖ¾Î»µ¼ÖÂ´íÎó
-  *         ¢ÚÒªÃ´×Ô¼ºÍâ²¿Çå±êÖ¾Î»£¬ÒªÃ´Ö´ÐÐµÄÄÚÈÝÒª½ô¸úÕâ¸öº¯ÊýºóÃæ£¬²»È»ÈÝÒ×´í¹ý´¥·¢Ê±¼ä
-  *         ¢Û*ignore_first_trigger_flagÐèÒª³õÊ¼Îª0
-			 ¢Ü*ignore_first_trigger_flag ÍË³ö³¤°´ºóÒªÇåÁã
-  * @param  private_flag: ±êÖ¾Î»Ö¸Õë£¬ÓÃÓÚÖ¸Ê¾ÊÇ·ñ´¥·¢£¨1Îª´¥·¢£©
-  * @param  last_trigger_tick: ÓÃÓÚ´æ´¢ÉÏ´Î´¥·¢µÄÊ±¼ä£¨Íâ²¿±äÁ¿£¬Ðè³õÊ¼»¯Îª0£©
-  * @param  ignore_first_trigger_flag: ÊÇ·ñºöÂÔµÚÒ»´Î´¥·¢µÄ±êÖ¾Î»£¨Íâ²¿±äÁ¿£¬Ðè³õÊ¼»¯Îª0,ÍË³ö³¤°´ºóÒªÇåÁã£©
-  * @param  delay_tick: ´¥·¢µÄÊ±¼ä¼ä¸ô£¨µ¥Î»£ººÁÃë£©
-  * @param  if_ignore_first: ÊÇ·ñºöÂÔµÚÒ»´Î´¥·¢£¨1ÎªºöÂÔ£¬0Îª²»ºöÂÔ£©
+  * @brief  åœ¨å¾ªçŽ¯é‡Œå®šæ—¶è§¦å‘
+  * @note   â‘ éœ€è¦å¤–éƒ¨å®šä¹‰å˜é‡å­˜æ—¶é—´ã€ç¬¬ä¸€æ¬¡ä¸ç›´æŽ¥è§¦å‘æ ‡å¿—ä½,é˜²æ­¢å¤šå¤„è°ƒç”¨å…±ç”¨æ—¶é—´æˆ–æ ‡å¿—ä½å¯¼è‡´é”™è¯¯
+  *         â‘¡è¦ä¹ˆè‡ªå·±å¤–éƒ¨æ¸…æ ‡å¿—ä½ï¼Œè¦ä¹ˆæ‰§è¡Œçš„å†…å®¹è¦ç´§è·Ÿè¿™ä¸ªå‡½æ•°åŽé¢ï¼Œä¸ç„¶å®¹æ˜“é”™è¿‡è§¦å‘æ—¶é—´
+  *         â‘¢*ignore_first_trigger_flagéœ€è¦åˆå§‹ä¸º0
+			 â‘£*ignore_first_trigger_flag é€€å‡ºé•¿æŒ‰åŽè¦æ¸…é›¶
+  * @param  private_flag: æ ‡å¿—ä½æŒ‡é’ˆï¼Œç”¨äºŽæŒ‡ç¤ºæ˜¯å¦è§¦å‘ï¼ˆ1ä¸ºè§¦å‘ï¼‰
+  * @param  last_trigger_tick: ç”¨äºŽå­˜å‚¨ä¸Šæ¬¡è§¦å‘çš„æ—¶é—´ï¼ˆå¤–éƒ¨å˜é‡ï¼Œéœ€åˆå§‹åŒ–ä¸º0ï¼‰
+  * @param  ignore_first_trigger_flag: æ˜¯å¦å¿½ç•¥ç¬¬ä¸€æ¬¡è§¦å‘çš„æ ‡å¿—ä½ï¼ˆå¤–éƒ¨å˜é‡ï¼Œéœ€åˆå§‹åŒ–ä¸º0,é€€å‡ºé•¿æŒ‰åŽè¦æ¸…é›¶ï¼‰
+  * @param  delay_tick: è§¦å‘çš„æ—¶é—´é—´éš”ï¼ˆå•ä½ï¼šæ¯«ç§’ï¼‰
+  * @param  if_ignore_first: æ˜¯å¦å¿½ç•¥ç¬¬ä¸€æ¬¡è§¦å‘ï¼ˆ1ä¸ºå¿½ç•¥ï¼Œ0ä¸ºä¸å¿½ç•¥ï¼‰
   * @author HERMIT_PURPLE
   */
 void Time_Trigger_inloop(Time_trigger_t *Time_trigger_struct)
@@ -121,7 +121,7 @@ void Time_Trigger_inloop(Time_trigger_t *Time_trigger_struct)
 		return;
 	}
 
-	// Èç¹û½øÀ´Õâ¸öº¯Êý²»Ö±½Ó´¥·¢Ò»´Î,¾ÍÏÈ¸³ÖµÒ»´ÎÉÏ´ÎµÄÊ±¼ä
+	// å¦‚æžœè¿›æ¥è¿™ä¸ªå‡½æ•°ä¸ç›´æŽ¥è§¦å‘ä¸€æ¬¡,å°±å…ˆèµ‹å€¼ä¸€æ¬¡ä¸Šæ¬¡çš„æ—¶é—´
 	if (Time_trigger_struct->if_ignore_first == 1 && Time_trigger_struct->ignore_first_trigger_flag == 0)
 	{
 		*Time_trigger_struct->ignore_first_trigger_flag = 1;
@@ -133,7 +133,7 @@ void Time_Trigger_inloop(Time_trigger_t *Time_trigger_struct)
 		*Time_trigger_struct->private_flag = 1;
 		*Time_trigger_struct->last_trigger_tick = HAL_GetTick();
 	}
-	/*ÄÚ²¿Çå±êÖ¾Î»*/
+	/*å†…éƒ¨æ¸…æ ‡å¿—ä½*/
 	else
 	{
 		*Time_trigger_struct->private_flag = Time_trigger_struct->flag_before_trigger;

@@ -1,12 +1,53 @@
 /**
   ******************************************************************************
   * @file    control_task.c
-  * @brief   ¶ÁÈ¡imuĞÅÏ¢
+  * @brief   è¯»å–imuä¿¡æ¯
   ******************************************************************************
   */
 #include "control_task.h"
+#include "rc_sensor.h"
+#include "motor.h"
+#include "carctrl.h"
+#include "chassis.h"
+#include "drv_uart.h"
+#include "drv_can.h"
+#include "drv_status.h"
+#include "chassis_board.h"
 
-/* µ÷ÊÔ¹Û²ì±äÁ¿ */
+static uint32_t previous_ms;
+void Control_Init(void)
+{
+    rc_sensor.init(&rc_sensor);
+    Motor_Init();
+    Car_Init();
+    Chassis_Init();
+    Chassis_Board_ClockInit();
+    Drv_UART_Init();
+    Drv_CAN_Init();
+    previous_ms = HAL_GetTick();
+    mec_io.init_ok = 1;
+}
+
+static void Control_ChassisUpdate(void)
+{
+    uint32_t now = HAL_GetTick();
+    if (now - previous_ms < CHASSIS_CONTROL_MS || !mec_io.init_ok) { return; }
+    uint32_t saved = __get_PRIMASK();
+    __disable_irq();
+    rc_sensor.update(&rc_sensor);
+    Motor_Update();
+    now = HAL_GetTick();
+    __set_PRIMASK(saved);
+    uint32_t elapsed = now - previous_ms;
+    previous_ms = now;
+    car.work(&car, now, elapsed, Drv_CAN_Ready());
+    chassis.work(&chassis);
+    Drv_UART_Poll();
+    CAN_Send();
+}
+
+
+/* è°ƒè¯•è§‚å¯Ÿå˜é‡ */
 volatile uint32_t imu_task_count = 0;
 volatile uint32_t imu_update_count = 0;
 
@@ -20,17 +61,18 @@ void StartControlTask(void const *argument)
 
     for (;;)
     {
-        /* Ã¿½øÈëÒ»´ÎÈÎÎñÑ­»·£¬¼Ó 1 */
+        /* æ¯è¿›å…¥ä¸€æ¬¡ä»»åŠ¡å¾ªç¯ï¼ŒåŠ  1 */
         imu_task_count++;
+        Control_ChassisUpdate();
 
-        /* Õı³£×´Ì¬ºÍĞ£×¼×´Ì¬ÏÂ£¬¶¼ĞèÒª³ÖĞø¸üĞÂ IMU */
+        /* æ­£å¸¸çŠ¶æ€å’Œæ ¡å‡†çŠ¶æ€ä¸‹ï¼Œéƒ½éœ€è¦æŒç»­æ›´æ–° IMU */
         if (imu_sensor.work_state.err_code == IMU_NONE_ERR ||
             imu_sensor.work_state.err_code == IMU_DATA_CALI)
         {
-            /* ¶ÁÈ¡´«¸ĞÆ÷²¢Ö´ĞĞÄ£°åÀïµÄ¸üĞÂ´¦Àí */
+            /* è¯»å–ä¼ æ„Ÿå™¨å¹¶æ‰§è¡Œæ¨¡æ¿é‡Œçš„æ›´æ–°å¤„ç† */
             imu_sensor.update(&imu_sensor);
 
-            /* ±£´æÈıÖá½ÇËÙ¶È£¬·½±ãÔÚµ÷ÊÔ´°¿Ú²é¿´ */
+            /* ä¿å­˜ä¸‰è½´è§’é€Ÿåº¦ï¼Œæ–¹ä¾¿åœ¨è°ƒè¯•çª—å£æŸ¥çœ‹ */
             imu_gyro_x = imu_sensor.info->raw_info.gyro_x;
             imu_gyro_y = imu_sensor.info->raw_info.gyro_y;
             imu_gyro_z = imu_sensor.info->raw_info.gyro_z;
@@ -38,10 +80,7 @@ void StartControlTask(void const *argument)
             imu_update_count++;
         }
 
-        /* µ±Ç°ÈÎÎñµÈ´ı£¬ÈÃÆäËû¾ÍĞ÷ÈÎÎñÓĞ»ú»áÔËĞĞ */
+        /* å½“å‰ä»»åŠ¡ç­‰å¾…ï¼Œè®©å…¶ä»–å°±ç»ªä»»åŠ¡æœ‰æœºä¼šè¿è¡Œ */
         osDelay(1);
     }
 }
-
-
-

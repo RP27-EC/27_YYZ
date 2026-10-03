@@ -1,7 +1,7 @@
 #include "can_protocol.h"
 
 /**
- *  @brief  CAN1 接收数据
+ *  @brief  CAN1 鎺ユ敹鏁版嵁
  */
 void CAN1_rxDataHandler(uint32_t rxId, uint8_t *rxBuf)
 {
@@ -13,7 +13,7 @@ void CAN1_rxDataHandler(uint32_t rxId, uint8_t *rxBuf)
 			
 			break;
 		}
-		case 0x011://接收ID
+		case 0x011://鎺ユ敹ID
 		{
 			Yaw_Motor.rx(&Yaw_Motor, rxBuf);
 			break;
@@ -29,7 +29,7 @@ void CAN1_rxDataHandler(uint32_t rxId, uint8_t *rxBuf)
 	}
 }
 /**
- *  @brief  CAN2 接收数据
+ *  @brief  CAN2 鎺ユ敹鏁版嵁
  */
 void CAN2_rxDataHandler(uint32_t canId, uint8_t *rxBuf)
 {

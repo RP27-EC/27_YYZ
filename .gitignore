@@ -101,3 +101,7 @@ Desktop.ini
 
 # drivers
 /Drivers/STM32F4xx_HAL_Driver/
+
+# STM32CubeMX generated files
+startup_stm32h723xx.s
+STM32H723VG_FLASH.ld

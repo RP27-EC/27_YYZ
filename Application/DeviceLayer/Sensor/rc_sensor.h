@@ -2,9 +2,21 @@
 #define DOWN_RC_SENSOR_H
 #include <stdint.h>
 typedef struct { uint8_t value; } remote_switch_info_t;
+typedef struct { uint8_t value; } rc_button_info_t;
+enum {
+    RC_KEY_W = 1U << 0, RC_KEY_S = 1U << 1, RC_KEY_A = 1U << 2, RC_KEY_D = 1U << 3,
+    RC_KEY_SHIFT = 1U << 4, RC_KEY_CTRL = 1U << 5, RC_KEY_Q = 1U << 6, RC_KEY_E = 1U << 7,
+    RC_KEY_R = 1U << 8, RC_KEY_F = 1U << 9, RC_KEY_G = 1U << 10, RC_KEY_Z = 1U << 11,
+    RC_KEY_X = 1U << 12, RC_KEY_C = 1U << 13, RC_KEY_V = 1U << 14, RC_KEY_B = 1U << 15,
+    RC_KEY_MOVEMENT = RC_KEY_W | RC_KEY_S | RC_KEY_A | RC_KEY_D
+};
 typedef struct {
     int16_t ch0, ch1, ch2, ch3;
     remote_switch_info_t s1, s2;
+    int16_t mouse_vx, mouse_vy, mouse_vz;
+    uint16_t key_v;
+    rc_button_info_t mouse_btn_l, mouse_btn_r;
+    rc_button_info_t W, S, A, D, Shift, Ctrl, Q, E, R, F, G, Z, X, C, V, B;
     uint8_t valid;
     uint32_t frames, last_ms;
 } rc_sensor_info_t;

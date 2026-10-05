@@ -4,12 +4,12 @@
 #include "chassis_config.h"
 
 car_t car = {.work = Car_Work};
-volatile uint32_t mec_output_enable = 0;
+volatile uint32_t mec_output_enable = CHASSIS_BOOT_OUTPUT_ENABLE;
 
 void Car_Init(void)
 {
     car = (car_t){.car_ctrl = RC_CTRL, .car_mode = sleep_car, .work = Car_Work};
-    mec_output_enable = 0;
+    mec_output_enable = CHASSIS_BOOT_OUTPUT_ENABLE;
 }
 
 void Car_Work(car_t *c, uint32_t now_ms, uint32_t dt_ms, int can_ok)
@@ -17,6 +17,13 @@ void Car_Work(car_t *c, uint32_t now_ms, uint32_t dt_ms, int can_ok)
     ++c->loops;
     c->now_ms = now_ms;
     c->dt_ms = dt_ms;
+    const rc_sensor_info_t *r = rc_sensor.info;
+    car_ctrl_e requested = r->s1.value == RC_SW_DOWN ? KEY_CTRL : RC_CTRL;
+    /* Changing input source cancels the arm state; require a fresh OFF -> MID. */
+    if (c->car_ctrl != requested) {
+        c->car_mode = sleep_car; c->off_seen = 0; c->previous_switch = 0;
+    }
+    c->car_ctrl = requested;
     c->block_reason = 0;
     c->online_mask = Motor_OnlineMask(now_ms);
     if (mec_output_enable != 1) { c->block_reason |= CAR_BLOCK_OUTPUT; }
@@ -30,7 +37,6 @@ void Car_Work(car_t *c, uint32_t now_ms, uint32_t dt_ms, int can_ok)
         c->previous_switch = 0;
         return;
     }
-    const rc_sensor_info_t *r = rc_sensor.info;
     uint8_t sw = r->s2.value;
     if (sw != RC_SW_MID) {
         c->car_mode = sleep_car;
@@ -39,6 +45,7 @@ void Car_Work(car_t *c, uint32_t now_ms, uint32_t dt_ms, int can_ok)
         int neutral = r->ch0 >= -RC_ARM_NEUTRAL && r->ch0 <= RC_ARM_NEUTRAL &&
                       r->ch2 >= -RC_ARM_NEUTRAL && r->ch2 <= RC_ARM_NEUTRAL &&
                       r->ch3 >= -RC_ARM_NEUTRAL && r->ch3 <= RC_ARM_NEUTRAL;
+        if (c->car_ctrl == KEY_CTRL && (r->key_v & RC_KEY_MOVEMENT)) { neutral = 0; }
         if (c->off_seen && c->previous_switch != RC_SW_MID && neutral) {
             c->car_mode = mec_car;
         }

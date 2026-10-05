@@ -15,10 +15,16 @@ int RC_DecodeDbus(const uint8_t *d, uint32_t size, rc_sensor_info_t *out)
     for (unsigned i = 0; i < 4; ++i) {
         if (channels[i] < -660 || channels[i] > 660) { return 0; }
     }
+    r.mouse_vx = (int16_t)((uint16_t)d[6] | ((uint16_t)d[7] << 8));
+    r.mouse_vy = (int16_t)((uint16_t)d[8] | ((uint16_t)d[9] << 8));
+    r.mouse_vz = (int16_t)((uint16_t)d[10] | ((uint16_t)d[11] << 8));
+    r.mouse_btn_l.value = d[12]; r.mouse_btn_r.value = d[13];
+    r.key_v = (uint16_t)d[14] | ((uint16_t)d[15] << 8);
+    rc_button_info_t *keys[] = {&r.W, &r.S, &r.A, &r.D, &r.Shift, &r.Ctrl, &r.Q, &r.E,
+                              &r.R, &r.F, &r.G, &r.Z, &r.X, &r.C, &r.V, &r.B};
+    for (unsigned i = 0; i < 16; ++i) { keys[i]->value = (r.key_v >> i) & 1U; }
     /* Publish only a complete validated frame; preserve timestamp/counter. */
-    out->ch0 = r.ch0; out->ch1 = r.ch1; out->ch2 = r.ch2; out->ch3 = r.ch3;
-    out->s1.value = r.s1.value;
-    out->s2.value = r.s2.value;
-    out->valid = 1;
+    r.valid = 1; r.frames = out->frames; r.last_ms = out->last_ms;
+    *out = r;
     return 1;
 }

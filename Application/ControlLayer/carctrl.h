@@ -1,7 +1,7 @@
 #ifndef DOWN_CARCTRL_H
 #define DOWN_CARCTRL_H
 #include <stdint.h>
-typedef enum { RC_CTRL } car_ctrl_e;
+typedef enum { RC_CTRL = 0, KEY_CTRL = 1 } car_ctrl_e;
 typedef enum { sleep_car = 0, mec_car = 1 } car_mode_e;
 enum {
     CAR_BLOCK_OUTPUT = 1, CAR_BLOCK_REMOTE = 2, CAR_BLOCK_MOTOR = 4,

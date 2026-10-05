@@ -1,14 +1,19 @@
 # Active application: preserve the original ControlTask and LedTask workflow.
 # Layered H7 chassis application; inactive F4 templates remain excluded.
 target_sources(My_C PRIVATE
+    Application/DriverLayer/drv_pitch_link.c
+    Application/ProtocolLayer/board_pitch_protocol.c
     Core/Src/chassis_board_h723.c
     Application/DriverLayer/drv_uart.c Application/DriverLayer/drv_can.c
     Application/DriverLayer/drv_status.c
     Application/ProtocolLayer/rc_protocol.c
+    Application/ProtocolLayer/kt_yaw_protocol.c
     Application/DeviceLayer/Sensor/rc_sensor.c Application/DeviceLayer/motor.c
+    Application/DeviceLayer/yaw_probe.c
     Application/HardwareLayer/RM_motor.c
     Application/ParameterLayer/chassis_param.c
     Application/ControlLayer/carctrl.c Application/ModuleLayer/chassis.c
+    Application/ModuleLayer/gimbal.c
     Application/TaskLayer/control_task.c Application/TaskLayer/led_task.c
     Application/DeviceLayer/Sensor/imu_sensor.c
     Application/DeviceLayer/Imu/BMI088driver.c

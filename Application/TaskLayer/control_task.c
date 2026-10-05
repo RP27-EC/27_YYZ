@@ -1,9 +1,10 @@
 /**
   ******************************************************************************
   * @file    control_task.c
-  * @brief   读取imu信息
+  * @brief   调度底盘、Yaw角度串级、CAN2 Pitch板间输入和IMU更新。
   ******************************************************************************
   */
+/* Includes ------------------------------------------------------------------*/
 #include "control_task.h"
 #include "rc_sensor.h"
 #include "motor.h"
@@ -13,21 +14,22 @@
 #include "drv_can.h"
 #include "drv_status.h"
 #include "chassis_board.h"
+#include "yaw_probe.h"
+#include "gimbal.h"
+#include "drv_pitch_link.h"
 
-static uint32_t previous_ms;
-void Control_Init(void)
-{
-    rc_sensor.init(&rc_sensor);
-    Motor_Init();
-    Car_Init();
-    Chassis_Init();
-    Chassis_Board_ClockInit();
-    Drv_UART_Init();
-    Drv_CAN_Init();
-    previous_ms = HAL_GetTick();
-    mec_io.init_ok = 1;
-}
+/* Private variables ---------------------------------------------------------*/
+static uint32_t previous_ms; /**< 最近一次底盘控制时刻，毫秒。 */
 
+/* Exported variables --------------------------------------------------------*/
+volatile uint32_t imu_task_count = 0;   /**< 控制任务累计循环数。 */
+volatile uint32_t imu_update_count = 0; /**< IMU累计成功更新次数。 */
+volatile float imu_gyro_x = 0.0f;       /**< IMU原始X轴角速度，沿用传感器标度。 */
+volatile float imu_gyro_y = 0.0f;       /**< IMU原始Y轴角速度，沿用传感器标度。 */
+volatile float imu_gyro_z = 0.0f;       /**< IMU原始Z轴角速度，沿用传感器标度。 */
+
+/* Private functions ---------------------------------------------------------*/
+/** @brief 每约2ms复制反馈、控制四轮并在Yaw发送空档发送四轮电流。 */
 static void Control_ChassisUpdate(void)
 {
     uint32_t now = HAL_GetTick();
@@ -37,42 +39,51 @@ static void Control_ChassisUpdate(void)
     rc_sensor.update(&rc_sensor);
     Motor_Update();
     now = HAL_GetTick();
+    Yaw_Probe_Update(now);
     __set_PRIMASK(saved);
     uint32_t elapsed = now - previous_ms;
     previous_ms = now;
     car.work(&car, now, elapsed, Drv_CAN_Ready());
     chassis.work(&chassis);
     Drv_UART_Poll();
-    CAN_Send();
+    Pitch_Link_Update(now);
+    if (!Drv_CAN_PollYaw(now)) { CAN_Send(); }
 }
 
 
-/* 调试观察变量 */
-volatile uint32_t imu_task_count = 0;
-volatile uint32_t imu_update_count = 0;
+/* Exported functions --------------------------------------------------------*/
+/** @brief 初始化设备和默认控制许可，底盘/Yaw均等待拨杆启动手势。 */
+void Control_Init(void)
+{
+    rc_sensor.init(&rc_sensor);
+    Motor_Init();
+    Car_Init();
+    Chassis_Init();
+    Yaw_Probe_Init();
+    Gimbal_Init();
+    Chassis_Board_ClockInit();
+    Drv_UART_Init();
+    Drv_CAN_Init();
+    Pitch_Link_Init();
+    previous_ms = HAL_GetTick();
+    mec_io.init_ok = 1;
+}
 
-volatile float imu_gyro_x = 0.0f;
-volatile float imu_gyro_y = 0.0f;
-volatile float imu_gyro_z = 0.0f;
-
+/** @brief 运行底盘周期控制及IMU更新，并通过延时让出CPU。 */
 void StartControlTask(void const *argument)
 {
     (void)argument;
 
     for (;;)
     {
-        /* 每进入一次任务循环，加 1 */
         imu_task_count++;
         Control_ChassisUpdate();
 
-        /* 正常状态和校准状态下，都需要持续更新 IMU */
         if (imu_sensor.work_state.err_code == IMU_NONE_ERR ||
             imu_sensor.work_state.err_code == IMU_DATA_CALI)
         {
-            /* 读取传感器并执行模板里的更新处理 */
             imu_sensor.update(&imu_sensor);
 
-            /* 保存三轴角速度，方便在调试窗口查看 */
             imu_gyro_x = imu_sensor.info->raw_info.gyro_x;
             imu_gyro_y = imu_sensor.info->raw_info.gyro_y;
             imu_gyro_z = imu_sensor.info->raw_info.gyro_z;
@@ -80,7 +91,6 @@ void StartControlTask(void const *argument)
             imu_update_count++;
         }
 
-        /* 当前任务等待，让其他就绪任务有机会运行 */
         osDelay(1);
     }
 }

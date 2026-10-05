@@ -1,7 +1,7 @@
 /**
   ******************************************************************************
   * @file    drv_can.c
-  * @brief   CAN底层驱动
+  * @brief   bxCAN底层驱动，Pitch入口仅接受标准8字节数据帧。
   ******************************************************************************
   * @attention
   * 
@@ -42,23 +42,16 @@ CAN_TxHeaderTypeDef CAN_TxHeadeType;
   */
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 {
-  
-  if(hcan == &hcan1)
-  {
-		HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &hcan1RxFrame.header, hcan1RxFrame.data);
-		
-		CAN1_rxDataHandler(hcan1RxFrame.header.StdId, hcan1RxFrame.data);
-  }
-  else if(hcan == &hcan2)
-  {
-		HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &hcan2RxFrame.header, hcan2RxFrame.data);
-		
-		CAN2_rxDataHandler(hcan2RxFrame.header.StdId, hcan2RxFrame.data);
-  }
-  else 
-  {
-    return;
-  }
+    CAN_RxFrameTypeDef *frame;
+    if (hcan == &hcan1) frame = &hcan1RxFrame;
+    else if (hcan == &hcan2) frame = &hcan2RxFrame;
+    else return;
+    while (HAL_CAN_GetRxFifoFillLevel(hcan, CAN_RX_FIFO0)) {
+        if (HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &frame->header, frame->data) != HAL_OK) break;
+        if (frame->header.IDE != CAN_ID_STD || frame->header.RTR != CAN_RTR_DATA || frame->header.DLC != 8U) continue;
+        if (hcan == &hcan1) CAN1_rxDataHandler(frame->header.StdId, frame->data);
+        else CAN2_rxDataHandler(frame->header.StdId, frame->data);
+    }
 }
 
 /**

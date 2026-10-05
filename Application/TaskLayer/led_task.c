@@ -1,6 +1,6 @@
 #include "led_task.h"
 
-/* ¼ÇÂ¼ LED ·­×ª´ÎÊı */
+/* è®°å½• LED ç¿»è½¬æ¬¡æ•° */
 volatile uint32_t led_task_count = 0;
 
 void StartLedTask(void const *argument)
@@ -9,7 +9,7 @@ void StartLedTask(void const *argument)
 
     for (;;)
     {
-        // ·­×ªÀ¶µÆ×´Ì¬
+        // ç¿»è½¬è“ç¯çŠ¶æ€
         HAL_GPIO_TogglePin(LED_PORT, LED_BLUE_PIN);
         led_task_count++;
         osDelay(500);

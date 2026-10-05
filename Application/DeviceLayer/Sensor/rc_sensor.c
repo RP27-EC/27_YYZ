@@ -22,15 +22,15 @@ static void rc_sensor_heart_beat(rc_sensor_t *rc_sen);
 
 /* Private variables ---------------------------------------------------------*/
 /* Exported variables --------------------------------------------------------*/
-// Ò£¿ØÆ÷Çý¶¯
+// é¥æŽ§å™¨é©±åŠ¨
 drv_uart_t rc_sensor_driver = {
 	.id = DRV_UART3,
 	.tx_byte = NULL,
 };
 
-// Ò£¿ØÆ÷ÐÅÏ¢
+// é¥æŽ§å™¨ä¿¡æ¯
 rc_sensor_info_t rc_sensor_info = {
-	// ²¨ÂÖÌø±äÅÐ¶ÏÖµ
+	// æ³¢è½®è·³å˜åˆ¤æ–­å€¼
 	.tw_step_value[RC_TB_UP] = -600,
 	.tw_step_value[RC_TB_MU] = -200,
 	.tw_step_value[RC_TB_DN] = +600,
@@ -38,7 +38,7 @@ rc_sensor_info_t rc_sensor_info = {
 	.offline_max_cnt = 60,
 };
 
-// Ò£¿ØÆ÷´«¸ÐÆ÷
+// é¥æŽ§å™¨ä¼ æ„Ÿå™¨
 rc_sensor_t rc_sensor = {
 	.info = &rc_sensor_info,
 	.init = rc_sensor_init,
@@ -51,27 +51,27 @@ rc_sensor_t rc_sensor = {
 
 /* Private functions ---------------------------------------------------------*/
 /**
- *	@brief	Ò£¿ØÆ÷Êý¾Ý¼ì²é
- *  step[0]:²¦ÂÖÍÆµ½¶¥Ìø±ä
- *  step[1]:²¦ÂÖÍùÉÏÍÆÒ»µãÌø±ä
- *  step[2]:²¦ÂÖÍÆµ½µ×Ìø±ä
- *  step[3]:²¦ÂÖÍùÏÂÍÆÒ»µãÌø±ä
- *  ²»ÖªµÀË­Ð´µÄ³éÏóÍæÒâ£¬×¢ÊÍÃ»ÓÐÒ»µã
+ *	@brief	é¥æŽ§å™¨æ•°æ®æ£€æŸ¥
+ *  step[0]:æ‹¨è½®æŽ¨åˆ°é¡¶è·³å˜
+ *  step[1]:æ‹¨è½®å¾€ä¸ŠæŽ¨ä¸€ç‚¹è·³å˜
+ *  step[2]:æ‹¨è½®æŽ¨åˆ°åº•è·³å˜
+ *  step[3]:æ‹¨è½®å¾€ä¸‹æŽ¨ä¸€ç‚¹è·³å˜
+ *  ä¸çŸ¥é“è°å†™çš„æŠ½è±¡çŽ©æ„ï¼Œæ³¨é‡Šæ²¡æœ‰ä¸€ç‚¹
  */
 static void rc_sensor_check(rc_sensor_t *rc_sen)
 {
-	/*²¨ÂÖÌø±ä----------------------------------------------------------------*/
-	static int16_t thumbwheel_record = 0;	// ÓÃÀ´¼ÇÂ¼×î´ó²¦µ½¶àÉÙµÄ
-	static uint8_t thumbwheel_last_step[4]; // ÓÃÀ´¼ÇÂ¼ÉÏÒ»´ÎÌø±äµÄÖµ
+	/*æ³¢è½®è·³å˜----------------------------------------------------------------*/
+	static int16_t thumbwheel_record = 0;	// ç”¨æ¥è®°å½•æœ€å¤§æ‹¨åˆ°å¤šå°‘çš„
+	static uint8_t thumbwheel_last_step[4]; // ç”¨æ¥è®°å½•ä¸Šä¸€æ¬¡è·³å˜çš„å€¼
 	rc_sensor_info_t *rc_info = rc_sen->info;
 
-	/* ¸üÐÂ×î´ó²¨ÂÖÖµ*/
+	/* æ›´æ–°æœ€å¤§æ³¢è½®å€¼*/
 	if ((abs(rc_info->thumbwheel.value_last) < abs(rc_info->thumbwheel.value)) &&
 		(abs(thumbwheel_record) < abs(rc_info->thumbwheel.value)))
 	{
 		thumbwheel_record = rc_info->thumbwheel.value;
 	}
-	/*²¦ÂÖ»ØÕýºóÍ¨¹ý×î´ó²¨ÂÖÖµÀ´Ìø±ä*/
+	/*æ‹¨è½®å›žæ­£åŽé€šè¿‡æœ€å¤§æ³¢è½®å€¼æ¥è·³å˜*/
 	if ((abs(rc_info->thumbwheel.value) <=10) && (thumbwheel_record != 0))
 	{
 		for (char i = 0; i < 4; i++)
@@ -95,7 +95,7 @@ static void rc_sensor_check(rc_sensor_t *rc_sen)
 		}
 		thumbwheel_record = 0;
 	}
-	/*²¨ÂÖÉÏÉýÑØ¸³Öµ*/
+	/*æ³¢è½®ä¸Šå‡æ²¿èµ‹å€¼*/
 	for (uint8_t i = 0; i < 4; i++)
 	{
 		if (thumbwheel_last_step[i] != rc_info->thumbwheel.step[i])
@@ -111,8 +111,8 @@ static void rc_sensor_check(rc_sensor_t *rc_sen)
 
 	rc_info->thumbwheel.value_last = rc_info->thumbwheel.value;
 
-	/*²¦¸ËÌø±ä----------------------------------------------------*/
-	/* ×ó²¦¸ËÅÐ¶Ï */
+	/*æ‹¨æ†è·³å˜----------------------------------------------------*/
+	/* å·¦æ‹¨æ†åˆ¤æ–­ */
 	if (rc_sen->info->s1.value != rc_sen->info->s1.value_last)
 	{
 		switch (rc_sen->info->s1.value)
@@ -135,7 +135,7 @@ static void rc_sensor_check(rc_sensor_t *rc_sen)
 		rc_sen->info->s1.status = keep_R;
 	}
 
-	/* ÓÒ²¦¸ËÅÐ¶Ï */
+	/* å³æ‹¨æ†åˆ¤æ–­ */
 	if (rc_sen->info->s2.value != rc_sen->info->s2.value_last)
 	{
 		switch (rc_sen->info->s2.value)
@@ -188,7 +188,7 @@ static void rc_sensor_check(rc_sensor_t *rc_sen)
 }
 
 /**
- *	@brief	Ò£¿ØÆ÷ÐÄÌø°ü
+ *	@brief	é¥æŽ§å™¨å¿ƒè·³åŒ…
  */
 static void rc_sensor_heart_beat(rc_sensor_t *rc_sen)
 {
@@ -202,7 +202,7 @@ static void rc_sensor_heart_beat(rc_sensor_t *rc_sen)
 	}
 	else
 	{
-		/* ÀëÏß->ÔÚÏß */
+		/* ç¦»çº¿->åœ¨çº¿ */
 		if (rc_sen->work_state == DEV_OFFLINE)
 		{
 			rc_sen->work_state = DEV_ONLINE;
@@ -225,15 +225,15 @@ bool RC_IsChannelReset(void)
 
 void RC_ResetData(rc_sensor_t *rc)
 {
-	// Í¨µÀÖµÇ¿ÐÐÉèÖÃ³ÉÖÐ¼äÖµ(²»²¦¶¯Ò¡¸ËµÄ×´Ì¬)
+	// é€šé“å€¼å¼ºè¡Œè®¾ç½®æˆä¸­é—´å€¼(ä¸æ‹¨åŠ¨æ‘‡æ†çš„çŠ¶æ€)
 	rc->info->ch0 = 0;
 	rc->info->ch1 = 0;
 	rc->info->ch2 = 0;
 	rc->info->ch3 = 0;
-	// ×óÓÒ¿ª¹ØÑ¡ÔñÇ¿ÐÐÉèÖÃ³ÉÖÐ¼äÖµ×´Ì¬
+	// å·¦å³å¼€å…³é€‰æ‹©å¼ºè¡Œè®¾ç½®æˆä¸­é—´å€¼çŠ¶æ€
 	rc->info->s1.value = RC_SW_MID;
 	rc->info->s2.value = RC_SW_MID;
-	// Êó±ê
+	// é¼ æ ‡
 	rc->info->mouse_vx = 0;
 	rc->info->mouse_vy = 0;
 	rc->info->mouse_vz = 0;
@@ -242,7 +242,7 @@ void RC_ResetData(rc_sensor_t *rc)
 	rc->info->mouse_z = 0.f;
 	rc->info->mouse_btn_l.value = 0;
 	rc->info->mouse_btn_r.value = 0;
-	// ¼üÅÌ
+	// é”®ç›˜
 	rc->info->key_v = 0;
 	rc->info->W.value = 0;
 	rc->info->S.value = 0;
@@ -260,7 +260,7 @@ void RC_ResetData(rc_sensor_t *rc)
 	rc->info->C.value = 0;
 	rc->info->V.value = 0;
 	rc->info->B.value = 0;
-	// ×ó²¦ÂÖ
+	// å·¦æ‹¨è½®
 	rc->info->thumbwheel.value = 0;
 	rc->info->thumbwheel.value_last = 0;
 	rc->info->thumbwheel.step[RC_TB_UP] = 0;

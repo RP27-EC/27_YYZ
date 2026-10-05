@@ -5,18 +5,18 @@
  */
 void single_pid_ctrl(pid_ctrl_t *pid)
 {
-    // ±£´æÎó²îÖµ(ĞèÒªÔÚÍâÃæ×ÔĞĞ¼ÆËãÎó²î)
+    // ä¿å­˜è¯¯å·®å€¼(éœ€è¦åœ¨å¤–é¢è‡ªè¡Œè®¡ç®—è¯¯å·®)
 	//pid->err = pid->target-pid->measure;
 	pid->integral += pid->err;  
     pid->integral = constrain(pid->integral, -pid->integral_max, +pid->integral_max);
-    // p i d Êä³öÏî¼ÆËã
+    // p i d è¾“å‡ºé¡¹è®¡ç®—
     pid->pout = pid->kp * pid->err;
     pid->iout = pid->ki * pid->integral;
 	pid->last_dout=pid->dout;
-    // ÀÛ¼ÓpidÊä³öÖµ
+    // ç´¯åŠ pidè¾“å‡ºå€¼
     pid->out = pid->pout + pid->iout + pid->dout;
     pid->out = constrain(pid->out, -pid->out_max, pid->out_max);
-    // ¼ÇÂ¼ÉÏ´ÎÎó²îÖµ
+    // è®°å½•ä¸Šæ¬¡è¯¯å·®å€¼
     pid->last_err = pid->err;
 }
 

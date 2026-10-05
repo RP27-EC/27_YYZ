@@ -44,7 +44,7 @@ typedef struct led
 {
   led_state_e state;
   led_colour_e colour;
-  float 	   blink_fre; //每秒亮多少次
+  float 	   blink_fre; //姣忕浜灏戞
 	
 } led_t;
 

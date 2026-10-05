@@ -5,10 +5,10 @@
 #include "rp_math.h"
 #include "ave_filter.h"
 
-#define VALUE_PI  	3.1415926f   //¦°
+#define VALUE_PI  	3.1415926f   //Î 
 	
-#define RADIAN_CONVERSION_ANGLE (180/VALUE_PI)  //»¡¶È×ª½Ç¶È
-#define ANGLE_CONVERSION_RADIAN (VALUE_PI/180) 	//½Ç¶È×ª»¡¶È
+#define RADIAN_CONVERSION_ANGLE (180/VALUE_PI)  //å¼§åº¦è½¬è§’åº¦
+#define ANGLE_CONVERSION_RADIAN (VALUE_PI/180) 	//è§’åº¦è½¬å¼§åº¦
 
 
 #endif

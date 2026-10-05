@@ -1,10 +1,17 @@
+/**
+ * @file    BMI088driver.c
+ * @brief   BMI088寄存器初始化与原始采样，发布ID/传输有效性。
+ */
+/* Includes ------------------------------------------------------------------*/
 #include "BMI088driver.h"
 #include "BMI088reg.h"
 #include "BMI088Middleware.h"
 
 
+/* Exported variables --------------------------------------------------------*/
 fp32 BMI088_ACCEL_SEN = BMI088_ACCEL_3G_SEN;
 fp32 BMI088_GYRO_SEN = BMI088_GYRO_2000_SEN;
+volatile uint8_t BMI088_read_valid; /**< 本次采样可用位，读取前清零。 */
 
 
 
@@ -192,10 +199,13 @@ bool_t bmi088_gyro_init(void)
 
 
 
+/** @brief 读取原始传感器数据，仅ID正确且整次SPI成功时发布有效位。 */
 void BMI088_read(fp32 gyro[3], fp32 accel[3], fp32 *temperate)
 {
     uint8_t buf[8] = {0, 0, 0, 0, 0, 0};
     int16_t bmi088_raw_temp;
+    uint32_t errors = BMI088_io_errors;
+    BMI088_read_valid = 0U;
 
     BMI088_accel_read_muli_reg(BMI088_ACCEL_XOUT_L, buf, 6);
 
@@ -209,6 +219,7 @@ void BMI088_read(fp32 gyro[3], fp32 accel[3], fp32 *temperate)
     BMI088_gyro_read_muli_reg(BMI088_GYRO_CHIP_ID, buf, 8);
     if(buf[0] == BMI088_GYRO_CHIP_ID_VALUE)
     {
+        BMI088_read_valid = 1U;
         bmi088_raw_temp = (int16_t)((buf[3]) << 8) | buf[2];
         gyro[0] = bmi088_raw_temp * BMI088_GYRO_SEN;
         bmi088_raw_temp = (int16_t)((buf[5]) << 8) | buf[4];
@@ -217,6 +228,7 @@ void BMI088_read(fp32 gyro[3], fp32 accel[3], fp32 *temperate)
         gyro[2] = bmi088_raw_temp * BMI088_GYRO_SEN;
     }
     BMI088_accel_read_muli_reg(BMI088_TEMP_M, buf, 2);
+    BMI088_read_valid = BMI088_read_valid && errors == BMI088_io_errors;
 
     bmi088_raw_temp = (int16_t)((buf[0] << 3) | (buf[1] >> 5));
 

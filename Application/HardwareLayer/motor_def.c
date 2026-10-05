@@ -3,7 +3,7 @@
 #include "motor_def.h"
 
 /**
- * @brief  电机PID单个PID结构体初始化
+ * @brief  鐢垫満PID鍗曚釜PID缁撴瀯浣撳垵濮嬪寲
  */
 void motor_pid_init(motor_pid_t *motor_pid,motor_pid_t extern_motor_pid)
 { 

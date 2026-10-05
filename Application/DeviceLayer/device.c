@@ -1,28 +1,20 @@
 /**
- * @file  device.c
+ * @file    device.c
+ * @brief   初始化国赛坐标BMI088与Pitch探测，遥控仍由下板转发。
  */
- 
 /* Includes ------------------------------------------------------------------*/
 #include "device.h"
-
-/* Private macro -------------------------------------------------------------*/
-/* Private function prototypes -----------------------------------------------*/
-/* Private typedef -----------------------------------------------------------*/
-/* Private variables ---------------------------------------------------------*/
-/* Exported variables --------------------------------------------------------*/
-
-
-/* Private functions ---------------------------------------------------------*/
+#include "gimbal_pitch.h"
+#include "bmi.h"
 /* Exported functions --------------------------------------------------------*/
+/** @brief 初始化只读探测和控制状态，不初始化旧模板电机输出。 */
 void DEVICE_Init(void)
 {
-	imu_sensor.init(&imu_sensor);
-	rc_sensor.init(&rc_sensor);
-	rm_motor_list_init();
-    kt_motor_list_init();
-	ht_motor_list_init();
-	dm_motor_list_init();
-	
-
+    Gimbal_Pitch_Init();
+#if PITCH_USE_IMU
+    gim_trans.arz = PITCH_IMU_ARZ_DEG;
+    gim_trans.ary = PITCH_IMU_ARY_DEG;
+    gim_trans.arx = PITCH_IMU_ARX_DEG;
+    imu_sensor.init(&imu_sensor);
+#endif
 }
-

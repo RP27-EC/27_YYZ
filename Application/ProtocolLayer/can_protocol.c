@@ -1,43 +1,18 @@
+/**
+ * @file    can_protocol.c
+ * @brief   Pitch机械模式只路由CAN2电机参数/状态与下板命令。
+ */
+/* Includes ------------------------------------------------------------------*/
 #include "can_protocol.h"
-
-/**
- *  @brief  CAN1 ��������
- */
-void CAN1_rxDataHandler(uint32_t rxId, uint8_t *rxBuf)
+#include "gimbal_pitch.h"
+/* Exported functions --------------------------------------------------------*/
+/** @brief 此阶段不接入CAN1摩擦轮或旧模板电机。 */
+void CAN1_rxDataHandler(uint32_t id, uint8_t *data)
 {
-	switch (rxId)
-	{
-		case 0x0b:
-		{
-			L_Wheel.rx(&L_Wheel, rxBuf);
-			
-			break;
-		}
-		case 0x011://����ID
-		{
-			Yaw_Motor.rx(&Yaw_Motor, rxBuf);
-			break;
-		}
-		case 0x205:
-		{
-			R_Fric.rx(&R_Fric, rxBuf);
-			break;
-		}
-
-		default:
-			break;
-	}
+    (void)id; (void)data;
 }
-/**
- *  @brief  CAN2 ��������
- */
-void CAN2_rxDataHandler(uint32_t canId, uint8_t *rxBuf)
+/** @brief 接收经底层验证的标准8字节帧，电机与板间ID由核心精确匹配。 */
+void CAN2_rxDataHandler(uint32_t id, uint8_t *data)
 {
-	
-	switch (canId)
-	{
-		
-		default:
-			break;
-	}
+    (void)Gimbal_Pitch_Receive(id, data, 8U, HAL_GetTick());
 }

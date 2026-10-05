@@ -1,8 +1,16 @@
+/**
+ * @file    BMI088driver.h
+ * @brief   BMI088寄存器驱动及本次SPI采样有效性接口。
+ */
 #ifndef BMI088DRIVER_H
 #define BMI088DRIVER_H
 
 #include "struct_typedef.h"
 #include "main.h"
+
+/* Exported variables --------------------------------------------------------*/
+extern volatile uint8_t BMI088_read_valid; /**< 最近完整状态读取的陀螺仪ID与SPI传输均正常。 */
+extern volatile uint32_t BMI088_io_errors; /**< SPI传输失败累计次数，异常采样不用于Pitch。 */
 
 #define BMI088_TEMP_FACTOR 0.125f
 #define BMI088_TEMP_OFFSET 23.0f

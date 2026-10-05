@@ -9,11 +9,11 @@
  * Copyright 2020 RobotPilots
  * 
  * @note
- * Ê¹ÓÃcubemxÉú³ÉFREERTOSºó»á½¨Òé½«SYSµÄÊ±»ùÇÐ»»³É³ýSysTickÖ®ÍâµÄ¶¨Ê±Æ÷
- * ´Ó¶øÏµÍ³»á´æÔÚÁ½Ì×Ê±»ù£¬¢ÙÓÃÓÚRTOSµÄSysTick ¢ÚÓÃÓÚHALµÄHalTick
- * SysTick Ê¹ÓÃcortex-m4ÄÚºËµÄSysTick (SysTick->VAL»áÔÚÆô¶¯ÈÎÎñµ÷¶ÈÆ÷Ö®ºó²Å¸üÐÂ)
- * HalTick ÔÚ±¾¹¤³ÌÀïÃæÊ¹ÓÃTIM2 (TIM2->CNT¿ÉÌá¹©Î¢Ãî¼¶ÑÓÊ±)
- * # delay_us ºÍ delay_ms ²»»áÒýÆðÈÎÎñµ÷¶È(×èÈûÐÍ)
+ * ä½¿ç”¨cubemxç”ŸæˆFREERTOSåŽä¼šå»ºè®®å°†SYSçš„æ—¶åŸºåˆ‡æ¢æˆé™¤SysTickä¹‹å¤–çš„å®šæ—¶å™¨
+ * ä»Žè€Œç³»ç»Ÿä¼šå­˜åœ¨ä¸¤å¥—æ—¶åŸºï¼Œâ‘ ç”¨äºŽRTOSçš„SysTick â‘¡ç”¨äºŽHALçš„HalTick
+ * SysTick ä½¿ç”¨cortex-m4å†…æ ¸çš„SysTick (SysTick->VALä¼šåœ¨å¯åŠ¨ä»»åŠ¡è°ƒåº¦å™¨ä¹‹åŽæ‰æ›´æ–°)
+ * HalTick åœ¨æœ¬å·¥ç¨‹é‡Œé¢ä½¿ç”¨TIM2 (TIM2->CNTå¯æä¾›å¾®å¦™çº§å»¶æ—¶)
+ * # delay_us å’Œ delay_ms ä¸ä¼šå¼•èµ·ä»»åŠ¡è°ƒåº¦(é˜»å¡žåž‹)
  * 
  * @Version     V1.0
  * @date        15-September-2020
@@ -32,16 +32,16 @@ uint32_t haltick = 0;
 /* Private functions ---------------------------------------------------------*/
 /* Exported functions --------------------------------------------------------*/
 /**
- * @brief  »ñÈ¡µ±Ç°Ê±¼ä
+ * @brief  èŽ·å–å½“å‰æ—¶é—´
  * @param  None
- * @retval µ±Ç°Ê±¼ä
+ * @retval å½“å‰æ—¶é—´
  */
 uint32_t micros(void)
 {
 	register uint32_t ms, us;
 	
 	ms = HAL_GetTick();
-	/* Ñ¡ÓÃ¶¨Ê±Æ÷2×÷ÎªHALÊ±»ùµÄTimeBase */
+	/* é€‰ç”¨å®šæ—¶å™¨2ä½œä¸ºHALæ—¶åŸºçš„TimeBase */
 	/* Freq:1MHz => 1Tick = 1us */
 	/* Period:1ms */
 	us = TIM2->CNT;

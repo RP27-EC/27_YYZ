@@ -2,7 +2,7 @@
 /**
   ******************************************************************************
   * @file           : main.c
-  * @brief          : Main program body
+  * @brief          : F407 Pitch机械控制启动，CAN由DRIVER_Init统一启动一次。
   ******************************************************************************
   * @attention
   *
@@ -118,7 +118,6 @@ int main(void)
 	 MX_USB_DEVICE_Init();
 	DEVICE_Init();
 	DRIVER_Init();
-	CAN_Filter_Init();
 
 
   /* USER CODE END 2 */

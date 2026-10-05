@@ -18,7 +18,7 @@ typedef struct
 	int16_t index;
 	float value[ave_filter_times_max];
 	float value_ave;
-	float filter_times;		//滤波窗口数组长度
+	float filter_times;		//婊ゆ尝绐楀彛鏁扮粍闀垮害
 }ave_filter_t;
 
 void ave_fil_init(ave_filter_t *ave_fil);

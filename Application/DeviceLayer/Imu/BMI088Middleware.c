@@ -1,8 +1,16 @@
+/**
+ * @file    BMI088Middleware.c
+ * @brief   SPI1与BMI088片选/延时适配，记录有界SPI传输失败。
+ */
+/* Includes ------------------------------------------------------------------*/
 #include "BMI088Middleware.h"
 #include "main.h"
 
+/* Exported variables --------------------------------------------------------*/
 extern SPI_HandleTypeDef hspi1;
+volatile uint32_t BMI088_io_errors; /**< SPI失败计数，上层据此拒绝异常帧。 */
 
+/* Exported functions --------------------------------------------------------*/
 void BMI088_GPIO_init(void)
 {
 
@@ -64,10 +72,11 @@ void BMI088_GYRO_NS_H(void)
     HAL_GPIO_WritePin(CS1_GYRO_GPIO_Port, CS1_GYRO_Pin, GPIO_PIN_SET);
 }
 
+/** @brief 单字节SPI交换，5ms超时后记录失败并返回确定值。 */
 uint8_t BMI088_read_write_byte(uint8_t txdata)
 {
-    uint8_t rx_data;
-    HAL_SPI_TransmitReceive(&hspi1, &txdata, &rx_data, 1, 1000);
+    uint8_t rx_data = 0U;
+    if (HAL_SPI_TransmitReceive(&hspi1, &txdata, &rx_data, 1, 5U) != HAL_OK) ++BMI088_io_errors;
     return rx_data;
 }
 

@@ -4,17 +4,17 @@
 
 
 /* Private variables ---------------------------------------------------------*/
-// Ìí¼Óµç»úÊ±ÐèÒª³õÊ¼»¯µÄ²ÎÊý£º3508»¹ÊÇ6020£¬CAN1»¹ÊÇCAN2£¬ÒÔ¼°µç»úµÄ½ÓÊÕID£»
-// CAN·¢ËÍÊý×é°üº¬ÁËÓÃCAN1»¹ÊÇCAN2£¬·¢ËÍÊý¾ÝÏÂ±êÔÚµç»úMotor_SendDataÅÐ¶Ï¡£
+// æ·»åŠ ç”µæœºæ—¶éœ€è¦åˆå§‹åŒ–çš„å‚æ•°ï¼š3508è¿˜æ˜¯6020ï¼ŒCAN1è¿˜æ˜¯CAN2ï¼Œä»¥åŠç”µæœºçš„æŽ¥æ”¶IDï¼›
+// CANå‘é€æ•°ç»„åŒ…å«äº†ç”¨CAN1è¿˜æ˜¯CAN2ï¼Œå‘é€æ•°æ®ä¸‹æ ‡åœ¨ç”µæœºMotor_SendDataåˆ¤æ–­ã€‚
 //
 
 drv_can_t rm_motor_driver[] = {
 	[GIMB_P] = {
 		.can_id = DRV_CAN2,
-		.rx_id = ID_GIMB_P,  //0x204+µç»úid£º2
+		.rx_id = ID_GIMB_P,  //0x204+ç”µæœºidï¼š2
 	}
 };
-//·¢ËÍIDºÍ½ÓÊÕID¶¼¿ÉÒÔµ¥¶ÀÉèÖÃ,ËüµÄ»ØÀ¡±¨ÎÄµÄµÚÒ»¸ö×Ö½ÚÊÇÎÒÃÇ·¢ËÍ¸øËüµÄID£¬ËüµÄ»ØÀ¡±¨ÎÄID¿ÉÒÔµ¥¶ÀÉèÖÃ
+//å‘é€IDå’ŒæŽ¥æ”¶IDéƒ½å¯ä»¥å•ç‹¬è®¾ç½®,å®ƒçš„å›žé¦ˆæŠ¥æ–‡çš„ç¬¬ä¸€ä¸ªå­—èŠ‚æ˜¯æˆ‘ä»¬å‘é€ç»™å®ƒçš„IDï¼Œå®ƒçš„å›žé¦ˆæŠ¥æ–‡IDå¯ä»¥å•ç‹¬è®¾ç½®
 drv_can_t ht_motor_drive={
 		.rx_id = 0x0B,
 		.tx_id =0x09,
@@ -23,8 +23,8 @@ drv_can_t ht_motor_drive={
 
 
 
-/*PID½á¹¹Ìå¶¨Òå------------------------------------------------*/
-// ×¢Òâ¶¨ÒåÁËÖ®ºóÐèÒªÔÚrm_motor_list_initÓÃrm_motor_pid_init³õÊ¼»¯
+/*PIDç»“æž„ä½“å®šä¹‰------------------------------------------------*/
+// æ³¨æ„å®šä¹‰äº†ä¹‹åŽéœ€è¦åœ¨rm_motor_list_initç”¨rm_motor_pid_initåˆå§‹åŒ–
 
 motor_pid_t GIMB_P_mec = {
 	.speed.kp = 0,
@@ -44,9 +44,9 @@ extern CAN_HandleTypeDef hcan2;
 
 Motor_HT_Born_Info_t L_Wheel_Born_Info = 
 {	
-	.stdId = 0x009,//µç»ú¿ØÖÆ±¨ÎÄID
-	.hcan = &hcan1,//Ê¹ÓÃµÄCan×ÜÏß
-	.order_correction = 0,//µç»ú×Ü½Ç¶ÈµÄÕý·½ÏòÎªË³Ê±Õë
+	.stdId = 0x009,//ç”µæœºæŽ§åˆ¶æŠ¥æ–‡ID
+	.hcan = &hcan1,//ä½¿ç”¨çš„Canæ€»çº¿
+	.order_correction = 0,//ç”µæœºæ€»è§’åº¦çš„æ­£æ–¹å‘ä¸ºé¡ºæ—¶é’ˆ
 };
 Motor_HT_Rx_Info_t L_Wheel_Rx_Info_t;
 Motor_HT_Tx_Info_t L_Wheel_Tx_Info_t;
@@ -68,9 +68,9 @@ Motor_HT_t L_Wheel =
 /*DM_start*/
 Motor_DM_Born_Info_t Yaw_Born_Info =
 {
-	.stdId = 0x001,//µç»ú¿ØÖÆ±¨ÎÄID
+	.stdId = 0x001,//ç”µæœºæŽ§åˆ¶æŠ¥æ–‡ID
 	
-	.hcan = &hcan1,//Ê¹ÓÃµÄCan×ÜÏß
+	.hcan = &hcan1,//ä½¿ç”¨çš„Canæ€»çº¿
 
 };
 
@@ -187,7 +187,7 @@ KT_motor_t kt_motor[] = {
 /* Exported functions --------------------------------------------------------*/
 void rm_motor_list_init()
 {
-	/*µç»úÐÅÏ¢³õÊ¼»¯*/
+	/*ç”µæœºä¿¡æ¯åˆå§‹åŒ–*/
 	R_Fric.single_init(&R_Fric);
 	RM_Group.group_init(&RM_Group);
 }

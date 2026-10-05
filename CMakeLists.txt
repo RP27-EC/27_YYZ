@@ -39,6 +39,7 @@ add_subdirectory(cmake/stm32cubemx)
 
 # Custom application sources, include directories and CMSIS-DSP support.
 include(cmake/application.cmake)
+include(cmake/pitch-tests.cmake)
 
 # Link directories setup
 target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE

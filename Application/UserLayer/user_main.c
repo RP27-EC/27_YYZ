@@ -22,7 +22,7 @@ void user_main(void);
 /* Exported functions --------------------------------------------------------*/
 
 /**
- *	@brief	ÓÃ»§Éè±¸³õÊ¼»¯(Init)
+ *	@brief	ç”¨æˆ·è®¾å¤‡åˆå§‹åŒ–(Init)
  */
 void USER_Init(void)
 {
@@ -34,11 +34,11 @@ void USER_Init(void)
 
 
 /**
- *	@brief	ÓÃ»§Ó¦ÓÃ²ã£¬1msÖ´ĞĞÒ»´Î(Loop)
+ *	@brief	ç”¨æˆ·åº”ç”¨å±‚ï¼Œ1msæ‰§è¡Œä¸€æ¬¡(Loop)
  */
 void user_main(void)
 {
-	//µç»úĞÄÌø£¬ÓÃÓÚÅĞ¶ÏÊÇ·ñÊ§Áª
+	//ç”µæœºå¿ƒè·³ï¼Œç”¨äºåˆ¤æ–­æ˜¯å¦å¤±è”
 	motor[FRIC_R].heartbeat(&motor[FRIC_R]);
 	motor[FRIC_L].heartbeat(&motor[FRIC_L]);
 	motor[DIAL].heartbeat(&motor[DIAL]);
@@ -57,7 +57,7 @@ void user_main(void)
 
 
 /**
- *	@brief	¶¨Ê±Æ÷ÖĞ¶Ï»Øµ÷£¬1ms½øÈëÒ»´Î
+ *	@brief	å®šæ—¶å™¨ä¸­æ–­å›è°ƒï¼Œ1msè¿›å…¥ä¸€æ¬¡
  */
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
@@ -90,28 +90,28 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
  
  
 ///*	
-//	·¢ËÍÊı×é
+//	å‘é€æ•°ç»„
 //*/
 //int16_t send_buff[4];
 //float tar;
 //void StartControlTask(void const * argument)
 //{
 //	
-//	//µç»ú³õÊ¼»¯
+//	//ç”µæœºåˆå§‹åŒ–
 //	motor[GIMB_Y].init(&motor[GIMB_Y]);
-//	//µç»úËÙ¶Èpid³õÊ¼»¯
+//	//ç”µæœºé€Ÿåº¦pidåˆå§‹åŒ–
 //	motor[GIMB_Y].pid_init(&motor[GIMB_Y].pid.speed,gimb_y_speed_pid_param);
 //	
 //  for(;;)
 //  {
-//		//µç»úĞÄÌø£¬ÓÃÓÚÅĞ¶ÏÊÇ·ñÊ§Áª
+//		//ç”µæœºå¿ƒè·³ï¼Œç”¨äºåˆ¤æ–­æ˜¯å¦å¤±è”
 //		motor[GIMB_Y].heartbeat(&motor[GIMB_Y]);
 
-////		//pid¼ÆËã
+////		//pidè®¡ç®—
 //		send_buff[motor[GIMB_Y].id.buff_p] = motor[GIMB_Y].c_speed(&motor[GIMB_Y],tar);
 
 
-////		//¿ØÖÆÊı¾İµÄ·¢ËÍ
+////		//æ§åˆ¶æ•°æ®çš„å‘é€
 //		CAN1_Send_With_int16_to_uint8(motor[GIMB_Y].id.tx_id,send_buff);
 ////		
 ////		

@@ -1,7 +1,7 @@
 #include "Power_Limit.h"
 
 
-/*-×æ´«¹¦ÂÊ-*/
+/*-ç¥–ä¼ åŠŸç‡-*/
 void Chassis_Motor_Power_Limit(int16_t *data)
 {
 	float buffer = judge.info->power_heat_data.chassis_power_buffer;
@@ -11,14 +11,14 @@ void Chassis_Motor_Power_Limit(int16_t *data)
 	
 	OUT_MAX = CHAS_SP_MAX_OUT * 4.f;
 	
-	if(buffer > 60.f)buffer = 60.f;//·ÀÖ¹·ÉÆÂÖ®ºó»º³å250J±äÎªÕıÔöÒæÏµÊı
+	if(buffer > 60.f)buffer = 60.f;//é˜²æ­¢é£å¡ä¹‹åç¼“å†²250Jå˜ä¸ºæ­£å¢ç›Šç³»æ•°
 	
 	Limit_k = buffer / 60.f;
 	
 	if(buffer < 25.f)
-		Limit_k = Limit_k * Limit_k ;// * Limit_k; //3·½
+		Limit_k = Limit_k * Limit_k ;// * Limit_k; //3æ–¹
 	else
-		Limit_k = Limit_k;// * str->Limit_k; //Æ½·½
+		Limit_k = Limit_k;// * str->Limit_k; //å¹³æ–¹
 	
 	if(buffer < 60.f)
 		CHAS_LimitOutput = Limit_k * OUT_MAX;

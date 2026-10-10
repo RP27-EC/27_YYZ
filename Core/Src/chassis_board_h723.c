@@ -1,10 +1,16 @@
+/**
+ * @file    chassis_board_h723.c
+ * @brief   H723底盘板时钟与外设电源初始化，CAN公共时钟不得超过APB1时钟。
+ */
+/* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "chassis_board.h"
 #include "drv_status.h"
 
+/* Exported functions --------------------------------------------------------*/
+/** @brief CPU保持HSI64，PLL1Q为两条1Mbps CAN提供64MHz公共时钟。 */
 void Chassis_Board_ClockInit(void)
 {
-    /* CPU stays on HSI64. PLL1Q supplies CAN: 64/8*40/4 = 80 MHz. */
     RCC_OscInitTypeDef osc = {0};
     osc.OscillatorType = RCC_OSCILLATORTYPE_HSI;
     osc.HSIState = RCC_HSI_ON;
@@ -14,7 +20,7 @@ void Chassis_Board_ClockInit(void)
     osc.PLL.PLLM = 8;
     osc.PLL.PLLN = 40;
     osc.PLL.PLLP = 2;
-    osc.PLL.PLLQ = 4;
+    osc.PLL.PLLQ = 5;
     osc.PLL.PLLR = 2;
     osc.PLL.PLLRGE = RCC_PLL1VCIRANGE_3;
     osc.PLL.PLLVCOSEL = RCC_PLL1VCOWIDE;
@@ -25,7 +31,8 @@ void Chassis_Board_ClockInit(void)
     clk.Usart234578ClockSelection = RCC_USART234578CLKSOURCE_HSI;
     if (HAL_RCCEx_PeriphCLKConfig(&clk) != HAL_OK) { Error_Handler(); }
     mec_io.fdcan_clock_hz = HAL_RCCEx_GetPeriphCLKFreq(RCC_PERIPHCLK_FDCAN);
-    if (mec_io.fdcan_clock_hz != 80000000U) { Error_Handler(); }
+    if (mec_io.fdcan_clock_hz != 64000000U ||
+        mec_io.fdcan_clock_hz > HAL_RCC_GetPCLK1Freq()) { Error_Handler(); }
 
     /* Reference DM-MC02 board: PC15 enables peripheral 5 V (DBUS receiver). */
     __HAL_RCC_GPIOC_CLK_ENABLE();

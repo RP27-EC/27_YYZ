@@ -1,5 +1,12 @@
+/**
+ * @file rc_protocol.c
+ * @brief 校验DBUS四通道、开关、键鼠并解析拨轮，发布完整快照。
+ */
+/* Includes ------------------------------------------------------------------*/
 #include "rc_protocol.h"
 
+/* Exported functions --------------------------------------------------------*/
+/** @brief 将18字节DBUS帧解码为遥控快照。 */
 int RC_DecodeDbus(const uint8_t *d, uint32_t size, rc_sensor_info_t *out)
 {
     if (size != 18U) { return 0; }
@@ -15,6 +22,8 @@ int RC_DecodeDbus(const uint8_t *d, uint32_t size, rc_sensor_info_t *out)
     for (unsigned i = 0; i < 4; ++i) {
         if (channels[i] < -660 || channels[i] > 660) { return 0; }
     }
+    uint16_t wheel = (uint16_t)d[16] | (uint16_t)d[17] << 8;
+    r.thumbwheel = wheel >= 364U && wheel <= 1684U ? (int16_t)wheel - 1024 : 0;
     r.mouse_vx = (int16_t)((uint16_t)d[6] | ((uint16_t)d[7] << 8));
     r.mouse_vy = (int16_t)((uint16_t)d[8] | ((uint16_t)d[9] << 8));
     r.mouse_vz = (int16_t)((uint16_t)d[10] | ((uint16_t)d[11] << 8));

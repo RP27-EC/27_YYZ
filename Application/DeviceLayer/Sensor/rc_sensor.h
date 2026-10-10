@@ -1,3 +1,7 @@
+/**
+ * @file rc_sensor.h
+ * @brief DBUS遥控、键鼠和拨轮快照及在线状态接口。
+ */
 #ifndef DOWN_RC_SENSOR_H
 #define DOWN_RC_SENSOR_H
 #include <stdint.h>
@@ -11,9 +15,11 @@ enum {
     RC_KEY_MOVEMENT = RC_KEY_W | RC_KEY_S | RC_KEY_A | RC_KEY_D
 };
 typedef struct {
+    int16_t thumbwheel; /**< DBUS拨轮中心0，原始值；负端返回中心为UP事件。 */
     int16_t ch0, ch1, ch2, ch3;
     remote_switch_info_t s1, s2;
     int16_t mouse_vx, mouse_vy, mouse_vz;
+    float mouse_x, mouse_y; /**< 10帧均值鼠标输入，DBUS原始标度。 */
     uint16_t key_v;
     rc_button_info_t mouse_btn_l, mouse_btn_r;
     rc_button_info_t W, S, A, D, Shift, Ctrl, Q, E, R, F, G, Z, X, C, V, B;
@@ -34,5 +40,7 @@ void RC_Sensor_Init(rc_sensor_t *sensor);
 void RC_Sensor_Update(rc_sensor_t *sensor);
 void RC_Sensor_Receive(const uint8_t *data, uint32_t size, uint32_t now_ms);
 void RC_Sensor_Invalidate(void);
+/** @brief 清除旧会话的通道、拨杆、按键和鼠标历史；调用时屏蔽接收中断。 */
+void RC_Sensor_StandbyReset(void);
 int RC_Sensor_Online(uint32_t now_ms);
 #endif

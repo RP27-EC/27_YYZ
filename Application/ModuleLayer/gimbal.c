@@ -1,6 +1,6 @@
 /**
  * @file    gimbal.c
- * @brief   遥控/键鼠Yaw角度P与速度PI串级、独立测试、停止确认及诊断。
+ * @brief   机械编码器/陀螺仪IMU Yaw串级、输入、独立测试与停止确认。
  */
 
 /* Includes ------------------------------------------------------------------*/
@@ -9,6 +9,7 @@
 #include "kt_yaw_protocol.h"
 #include "chassis_config.h"
 #include "carctrl.h"
+#include "gyro_control.h"
 #include "rc_sensor.h"
 #include <math.h>
 #include <stdlib.h>
@@ -22,9 +23,12 @@ _Static_assert(GIMBAL_YAW_PULSE_RAW > 0 && GIMBAL_YAW_PULSE_RAW <= GIMBAL_YAW_CO
                "Yaw pulse must fit commissioning limit");
 
 /* Private variables ---------------------------------------------------------*/
+static uint32_t overspeed_started_ms; /**< 新鲜反馈连续超速起点，毫秒。 */
+static uint32_t overspeed_check_ms; /**< 上次超速检查时刻，毫秒；长间隔不累加。 */
+static uint8_t overspeed_active; /**< 连续超速计时是否有效。 */
 static uint32_t phase_ms, previous_ms, last_tx_ms; /**< 阶段、更新、发送时刻，毫秒。 */
 static uint32_t sample_frames, sample_ms; /**< 最近差分速度采样计数和时刻。 */
-static uint32_t zero_baseline, zero_encoder; /**< 清零前A1回复计数和本次标定零点。 */
+static uint32_t zero_encoder; /**< 本次标定零点，编码器计数。 */
 static int32_t angle_direction, output_direction; /**< 本次角度和电流方向快照。 */
 static float sample_deg; /**< 最近速度采样连续角，度。 */
 static uint8_t tx_started, zero_sent; /**< 限频起点和本阶段首帧零输出是否入队。 */
@@ -39,7 +43,9 @@ static uint32_t waiting_pulse_ms; /**< 等待遥控期间锁存的点动时长�
 static uint32_t settle_streak_ms; /**< 当前连续到位时间，毫秒。 */
 static float waiting_speed, waiting_kp, waiting_ki; /**< 遥控恢复期间锁存的请求4速度及PI增益。 */
 static uint32_t waiting_speed_ms; /**< 遥控恢复期间锁存的请求4时长，毫秒；0持续运行。 */
-static uint8_t remote_off_seen; /**< 空闲时曾收到右拨杆停止档，下一次中档可申请启动。 */
+static uint32_t turn_ms; /**< 转向开始时刻，毫秒。 */
+static uint16_t last_keys; /**< 键盘上周期按键，检测配置换头键的按下沿。 */
+static uint8_t wheel_up_seen; /**< 拨轮负端后回中事件记忆。 */
 static car_ctrl_e remote_source; /**< 本轮遥控或键鼠输入来源，途中切换会退出。 */
 
 /* Exported variables --------------------------------------------------------*/
@@ -59,6 +65,7 @@ volatile uint32_t gimbal_yaw_speed_ms = GIMBAL_YAW_TEST_SPEED_MS; /**< 下一次
 volatile float yaw_scope_target_dps, yaw_scope_speed_dps; /**< 实时目标与滤波速度镜像，度/秒。 */
 volatile float yaw_scope_current_raw, yaw_scope_integral_raw; /**< 实时电流指令和积分输出镜像，原始值。 */
 volatile float yaw_scope_angle_target_deg, yaw_scope_angle_actual_deg, yaw_scope_angle_error_deg; /**< 连续目标/实际/误差镜像，度。 */
+volatile float yaw_scope_angle_kp; /**< 本周期角度外环实际Kp镜像，1/秒。 */
 volatile uint32_t yaw_scope_state; /**< 实时状态枚举镜像，数值0..9。 */
 
 /* Private functions ---------------------------------------------------------*/
@@ -70,30 +77,30 @@ static float clamp(float value, float lower, float upper)
     return value;
 }
 
-/** @brief 判断控制反馈是否新鲜、连续有效并且无已知错误位。 */
-static int feedback_ready(uint32_t now, int starting)
+/** @brief 采样年龄只记录；已上报的电机内部错误保留停机判据。 */
+static int motor_fault(void)
 {
-    return yaw_probe.angle_valid && yaw_probe.continuous_valid &&
-        (uint32_t)(now - yaw_probe.feedback.last_state_ms) <=
-            (starting ? YAW_PROBE_OFFLINE_MS : GIMBAL_YAW_FEEDBACK_MS) &&
-        yaw_probe.feedback.error_frames &&
-        (uint32_t)(now - yaw_probe.feedback.last_error_ms) <= GIMBAL_YAW_ERROR_MS &&
-        !yaw_probe.feedback.status.error_state;
+    return yaw_probe.feedback.error_frames && yaw_probe.feedback.status.error_state;
 }
 
-/** @brief 检查本阶段首次零输出之后收到的新鲜且近静止A1回复。 */
-static int zero_reply(uint32_t now)
+/** @brief 发布反馈诊断，保留上次合法数据并持续查询。 */
+static void record_feedback(uint32_t now)
 {
-    return zero_sent && yaw_probe.feedback.torque_frames != zero_baseline &&
-        (uint32_t)(now - yaw_probe.feedback.last_torque_ms) <= GIMBAL_YAW_FEEDBACK_MS &&
-        abs(yaw_probe.feedback.torque_current_raw) <= GIMBAL_YAW_ZERO_CURRENT &&
-        abs(yaw_probe.feedback.torque_speed_dps) <= GIMBAL_YAW_ZERO_SPEED;
+    gimbal_yaw.feedback_age_ms = now - yaw_probe.feedback.last_state_ms;
+    gimbal_yaw.error_age_ms = now - yaw_probe.feedback.last_error_ms;
+    gimbal_yaw.imu_age_ms = now - gyro_control.last_ms;
+    if (!yaw_probe.angle_valid || !yaw_probe.continuous_valid ||
+        gimbal_yaw.feedback_age_ms > GIMBAL_YAW_FEEDBACK_MS ||
+        !yaw_probe.feedback.error_frames || gimbal_yaw.error_age_ms > GIMBAL_YAW_ERROR_MS ||
+        (gimbal_yaw.gyro_mode && !Gyro_Ready(now))) ++gimbal_yaw.feedback_warnings;
 }
 
 /** @brief 转入零输出确认，记录退出原因和测试位移。 */
 static void stop(gimbal_yaw_reason_t reason, uint32_t now)
 {
     if (gimbal_yaw.state == GIMBAL_STOPPING) { return; }
+    gyro_control.turning = 0U;
+    gimbal_yaw.angle_integral_sum = 0.0f;
     gimbal_yaw.reason = reason;
     gimbal_yaw.exit_block_reason = reason == GIMBAL_REASON_INTERLOCK ? gimbal_yaw.interlock_block_reason : 0;
     if (gimbal_yaw.state == GIMBAL_PULSE || gimbal_yaw.state == GIMBAL_HOLD ||
@@ -116,6 +123,7 @@ static void stop(gimbal_yaw_reason_t reason, uint32_t now)
 /** @brief 新状态帧上更新连续角差分速度，重复快照不重复积分。 */
 static void update_speed(void)
 {
+    if (gimbal_yaw.gyro_mode && gyro_control.valid) { gimbal_yaw.speed_estimate_dps = gyro_control.speed_dps; return; }
     if (sample_frames == yaw_probe.feedback.state_frames) { return; }
     uint32_t elapsed = yaw_probe.feedback.last_state_ms - sample_ms;
     if (elapsed && elapsed <= GIMBAL_YAW_FEEDBACK_MS) {
@@ -218,7 +226,7 @@ static gimbal_yaw_reason_t request_reason(uint32_t request, float offset, int32_
     return GIMBAL_REASON_NONE;
 }
 
-/** @brief 检查请求；仅遥控失效时先限时等待，期间不发送电流帧。 */
+/** @brief 检查主动许可与请求；非法参数丢弃，遥控未恢复时保持等待。 */
 static void begin(uint32_t request, uint32_t now, int interlock)
 {
     gimbal_yaw.start_block_reason = gimbal_yaw.interlock_block_reason;
@@ -227,7 +235,7 @@ static void begin(uint32_t request, uint32_t now, int interlock)
     float offset = gimbal_yaw_offset_deg;
     int32_t direction = gimbal_yaw_output_direction;
     if (gimbal_yaw_enable != 1U) { reason = GIMBAL_REASON_DISABLED; }
-    else if (request != 5U && !interlock && gimbal_yaw.interlock_block_reason == GIMBAL_BLOCK_REMOTE &&
+    else if (request != 5U && !interlock && !RC_Sensor_Online(now) &&
              request_reason(request, offset, direction) == GIMBAL_REASON_NONE) {
         gimbal_yaw.state = GIMBAL_WAIT_REMOTE;
         gimbal_yaw.reason = GIMBAL_REASON_INTERLOCK;
@@ -248,13 +256,20 @@ static void begin(uint32_t request, uint32_t now, int interlock)
         return;
     }
     else if (!interlock) { reason = GIMBAL_REASON_INTERLOCK; }
-    else if (!feedback_ready(now, 1)) { reason = GIMBAL_REASON_FEEDBACK; }
+    else if (motor_fault()) { reason = GIMBAL_REASON_FEEDBACK; }
     else { reason = request_reason(request, offset, direction); }
     if (reason != GIMBAL_REASON_NONE) {
-        gimbal_yaw.state = GIMBAL_FAULT;
+        if (reason == GIMBAL_REASON_REQUEST || reason == GIMBAL_REASON_DIRECTION) ++gimbal_yaw.invalid_requests;
+        gyro_control.turning = 0U;
+        gimbal_yaw.angle_integral_sum = 0.0f;
         gimbal_yaw.reason = reason;
         return;
     }
+    gimbal_yaw.gyro_mode = request == 5U && Car_IsGyroMode(car.car_mode);
+    gimbal_yaw.imu_generation = gyro_control.generation;
+    gimbal_yaw.car_session = car.sessions;
+    gimbal_yaw.angle_integral_sum = 0.0f;
+    last_keys = rc_sensor.info->key_v; wheel_up_seen = 0U; gyro_control.turning = 0U;
     gimbal_yaw.state = GIMBAL_ZEROING;
     gimbal_yaw.reason = GIMBAL_REASON_NONE;
     gimbal_yaw.request = request;
@@ -264,6 +279,8 @@ static void begin(uint32_t request, uint32_t now, int interlock)
         (request == 3U ? GIMBAL_YAW_SESSION_MS : gimbal_yaw.pulse_ms);
     gimbal_yaw.active_ms = gimbal_yaw.exit_block_reason = 0;
     ++gimbal_yaw.sessions;
+    ++gimbal_yaw.restart_attempts;
+    overspeed_active = 0U; gimbal_yaw.overspeed_ms = 0U;
     gimbal_yaw.start_deg = gimbal_yaw.target_deg = gimbal_yaw.actual_deg;
     gimbal_yaw.goal_deg = gimbal_yaw.start_deg + (request == 3U ? offset : 0);
     gimbal_yaw.current_raw = 0;
@@ -291,47 +308,42 @@ static void begin(uint32_t request, uint32_t now, int interlock)
     zero_encoder = yaw_probe_zero_encoder;
     angle_direction = yaw_probe_direction;
     output_direction = direction;
-    if (request == 5U) { remote_source = car.car_ctrl; }
+    if (request == 5U) {
+        remote_source = car.car_ctrl;
+        if (gimbal_yaw.gyro_mode) {
+            gimbal_yaw.angle_control = 1U; gimbal_yaw.angle_kp = GYRO_YAW_ANGLE_KP;
+            gimbal_yaw.speed_kp = GYRO_YAW_SPEED_KP; gimbal_yaw.speed_ki = GYRO_YAW_SPEED_KI;
+        }
+    }
+    gimbal_yaw.angle_effective_kp = request == 3U || (request == 5U && gimbal_yaw.angle_control) ?
+        gimbal_yaw.angle_kp : 0.0f;
     phase_ms = now;
     tx_started = zero_sent = 0;
 }
 
-/** @brief 检查整车启动时四通道回中，键鼠还需释放平移按键并停止鼠标移动。 */
-static uint32_t remote_neutral_blocks(void)
-{
-    const rc_sensor_info_t *rc = rc_sensor.info;
-    uint32_t blocks = 0;
-    if (abs(rc->ch0) > RC_ARM_NEUTRAL || abs(rc->ch1) > RC_ARM_NEUTRAL ||
-        abs(rc->ch2) > RC_ARM_NEUTRAL || abs(rc->ch3) > RC_ARM_NEUTRAL) { blocks |= GIMBAL_BLOCK_STICKS; }
-    if (car.car_ctrl == KEY_CTRL && ((rc->key_v & RC_KEY_MOVEMENT) || rc->mouse_vx != 0)) {
-        blocks |= GIMBAL_BLOCK_KEYS;
-    }
-    return blocks;
-}
-
-/** @brief 空闲停止档记录启动手势，近静止时重建失效连续角，中档只申请一次启动。 */
+/** @brief 按整车许可自动启动机械或世界角会话，不限制拨杆档位。 */
 static void remote_start(uint32_t now, int interlock)
 {
-    if (gimbal_yaw_enable != 1U || !RC_Sensor_Online(now)) { remote_off_seen = 0; return; }
-    uint8_t sw = rc_sensor.info->s2.value;
-    if (sw == RC_SW_UP || sw == RC_SW_DOWN) {
-        remote_off_seen = 1;
-        if (yaw_probe.angle_valid && !yaw_probe.continuous_valid &&
-            abs(yaw_probe.feedback.status.current_raw) <= GIMBAL_YAW_ZERO_CURRENT &&
-            abs(yaw_probe.feedback.status.speed_dps) <= GIMBAL_YAW_ZERO_SPEED) { yaw_probe_angle_reset = 1; }
-        return;
-    }
-    if (sw != RC_SW_MID || !remote_off_seen) { return; }
-    remote_off_seen = 0;
-    uint32_t neutral_blocks = remote_neutral_blocks();
-    gimbal_yaw.interlock_block_reason |= neutral_blocks;
-    begin(5U, now, interlock && !neutral_blocks);
+    if (gimbal_yaw.reason == GIMBAL_REASON_SPEED &&
+        (!yaw_probe.feedback.state_frames || now - yaw_probe.feedback.last_state_ms > GIMBAL_YAW_FEEDBACK_MS ||
+         abs(yaw_probe.feedback.status.speed_dps) > gimbal_yaw.overspeed_limit_dps ||
+         (gimbal_yaw.gyro_mode && gyro_control.valid &&
+          (!Gyro_Ready(now) || fabsf(gyro_control.speed_dps) > gimbal_yaw.overspeed_limit_dps)))) return;
+    if ((mec_output_enable != 1U || !RC_Sensor_Online(now)) && yaw_probe.angle_valid && !yaw_probe.continuous_valid &&
+        abs(yaw_probe.feedback.status.current_raw) <= GIMBAL_YAW_ZERO_CURRENT &&
+        abs(yaw_probe.feedback.status.speed_dps) <= GIMBAL_YAW_ZERO_SPEED) yaw_probe_angle_reset = 1U;
+    if (gimbal_yaw_enable == 1U && RC_Sensor_Online(now) && interlock &&
+        (car.car_mode == mec_car || Car_IsGyroMode(car.car_mode))) begin(5U, now, interlock);
 }
 
 /** @brief 将右杆或鼠标X映射到角度目标变化速率/直接速度，正为逆时针。 */
 static float remote_input_rate(void)
 {
     const rc_sensor_info_t *rc = rc_sensor.info;
+    if (gimbal_yaw.gyro_mode) {
+        return remote_source == KEY_CTRL ? GYRO_MOUSE_YAW_GAIN * rc->mouse_x :
+            (abs(rc->ch0) > RC_DEADBAND ? GYRO_RC_YAW_GAIN * rc->ch0 : 0.0f);
+    }
     float requested = 0;
     float limit = gimbal_yaw.angle_control ? GIMBAL_YAW_CONTROL_ANGLE_RATE_DPS : GIMBAL_YAW_CONTROL_MAX_SPEED_DPS;
     if (remote_source == KEY_CTRL) {
@@ -348,31 +360,95 @@ static float remote_input_rate(void)
     return clamp(requested, -limit, limit);
 }
 
-/** @brief 累计连续目标并经角度P生成速度，或沿用直接速度；两者共用已调速度PI。 */
-static void remote_control(uint32_t elapsed)
+/** @brief 机械遥控小误差用低Kp，中间连续插值，大误差用会话锁存Kp。 */
+static float mechanical_angle_kp(float error)
+{
+    if (!GIMBAL_YAW_CONTROL_ANGLE_SOFT_ENABLE) return gimbal_yaw.angle_kp;
+    float magnitude = fabsf(error);
+    float near_kp = fminf(GIMBAL_YAW_CONTROL_ANGLE_KP_NEAR, gimbal_yaw.angle_kp);
+    if (magnitude <= GIMBAL_YAW_CONTROL_ANGLE_NEAR_DEG) return near_kp;
+    if (magnitude >= GIMBAL_YAW_CONTROL_ANGLE_FAR_DEG) return gimbal_yaw.angle_kp;
+    float blend = (magnitude - GIMBAL_YAW_CONTROL_ANGLE_NEAR_DEG) /
+        (GIMBAL_YAW_CONTROL_ANGLE_FAR_DEG - GIMBAL_YAW_CONTROL_ANGLE_NEAR_DEG);
+    return near_kp + (gimbal_yaw.angle_kp - near_kp) * blend;
+}
+
+/** @brief 两模式共用R按下沿或双上拨杆负端回中；等待期间消费重复动作。 */
+static int turn_requested(const rc_sensor_info_t *rc)
+{
+    int key_edge = (rc->key_v & GYRO_TURN_KEY_MASK) && !(last_keys & GYRO_TURN_KEY_MASK);
+    int wheel_edge = 0;
+    last_keys = rc->key_v;
+    if (remote_source != RC_CTRL || rc->s1.value != RC_SW_UP || rc->s2.value != RC_SW_UP ||
+        gyro_control.turning) {
+        wheel_up_seen = 0U;
+    } else if (rc->thumbwheel <= GYRO_TURN_WHEEL_TRIGGER) {
+        wheel_up_seen = 1U;
+    } else if (wheel_up_seen && abs(rc->thumbwheel) <= GYRO_TURN_WHEEL_CENTER) {
+        wheel_up_seen = 0U;
+        wheel_edge = 1;
+    }
+    return GYRO_TURN_ENABLE && !gyro_control.turning && (remote_source == KEY_CTRL ? key_edge : wheel_edge);
+}
+
+/** @brief 两模式共用换头到位及超时记录，超时不清除角度目标。 */
+static void turn_update(uint32_t now)
+{
+    if (gyro_control.turning && fabsf(gimbal_yaw.error_deg) <= GYRO_TURN_SETTLE_DEG) {
+        gyro_control.turning = 0U; ++gimbal_yaw.turn_completed;
+    } else if (gyro_control.turning && now - turn_ms >= GYRO_TURN_MS) {
+        gyro_control.turning = 0U; ++gimbal_yaw.turn_timeouts;
+    }
+}
+
+/** @brief 累计目标并生成速度；换头期间保持连续角方向，机械遥控按误差调节Kp。 */
+static void remote_control(uint32_t now, uint32_t elapsed)
 {
     float rate = remote_input_rate();
-    if (gimbal_yaw.angle_control) {
-        if (remote_source == KEY_CTRL && (rc_sensor.info->key_v & RC_KEY_CTRL)) {
+    if (turn_requested(rc_sensor.info)) {
+        gimbal_yaw.target_deg += GYRO_TURN_ANGLE_DEG;
+        gyro_control.turning = 1U; turn_ms = now; ++gimbal_yaw.turn_count;
+    }
+    if (gimbal_yaw.gyro_mode) {
+        if (!gyro_control.turning || remote_source == KEY_CTRL) gimbal_yaw.target_deg += rate * elapsed * 0.001f;
+        gimbal_yaw.error_deg = gyro_control.turning ? gimbal_yaw.target_deg - gimbal_yaw.actual_deg :
+            remainderf(remainderf(gimbal_yaw.target_deg, 360.0f) - remainderf(gimbal_yaw.actual_deg, 360.0f), 360.0f);
+        gimbal_yaw.target_deg = gimbal_yaw.actual_deg + gimbal_yaw.error_deg;
+        gimbal_yaw.goal_deg = gimbal_yaw.target_deg;
+        turn_update(now);
+        gimbal_yaw.angle_integral_sum = clamp(gimbal_yaw.angle_integral_sum + gimbal_yaw.error_deg,
+            -GYRO_YAW_ANGLE_SUM_MAX, GYRO_YAW_ANGLE_SUM_MAX);
+        gimbal_yaw.angle_effective_kp = gimbal_yaw.angle_kp;
+        gimbal_yaw.speed_target_dps = clamp(gimbal_yaw.angle_effective_kp * gimbal_yaw.error_deg +
+            GYRO_YAW_ANGLE_KI * gimbal_yaw.angle_integral_sum, -GYRO_YAW_MAX_SPEED_DPS, GYRO_YAW_MAX_SPEED_DPS);
+        gimbal_yaw.speed_setpoint_dps = gimbal_yaw.speed_target_dps;
+        speed_control(elapsed);
+        return;
+    }
+    if (gimbal_yaw.angle_control || gyro_control.turning) {
+        if (!gyro_control.turning && remote_source == KEY_CTRL && (rc_sensor.info->key_v & RC_KEY_CTRL)) {
             gimbal_yaw.target_deg = gimbal_yaw.actual_deg;
             gimbal_yaw.speed_integral_raw = 0;
-        } else { gimbal_yaw.target_deg += rate * (elapsed * 0.001f); }
+        } else if (!gyro_control.turning || remote_source == KEY_CTRL) {
+            gimbal_yaw.target_deg += rate * (elapsed * 0.001f);
+        }
         gimbal_yaw.goal_deg = gimbal_yaw.target_deg;
         gimbal_yaw.error_deg = gimbal_yaw.target_deg - gimbal_yaw.actual_deg;
-        gimbal_yaw.speed_target_dps = clamp(gimbal_yaw.angle_kp * gimbal_yaw.error_deg,
+        turn_update(now);
+        gimbal_yaw.angle_effective_kp = mechanical_angle_kp(gimbal_yaw.error_deg);
+        gimbal_yaw.speed_target_dps = clamp(gimbal_yaw.angle_effective_kp * gimbal_yaw.error_deg,
             -GIMBAL_YAW_CONTROL_MAX_SPEED_DPS, GIMBAL_YAW_CONTROL_MAX_SPEED_DPS);
-    } else { gimbal_yaw.speed_target_dps = rate; }
+    } else { gimbal_yaw.angle_effective_kp = 0.0f; gimbal_yaw.speed_target_dps = rate; }
     gimbal_yaw.speed_setpoint_dps = gimbal_yaw.speed_target_dps;
     speed_control(elapsed);
 }
 
-/** @brief 等待遥控及全部条件连续恢复，超时、撤销或其他故障立即取消。 */
+/** @brief 遥控恢复后重试请求，等待超时只记录；主动撤销或标定变化仍取消。 */
 static void wait_remote(uint32_t now, int interlock)
 {
     gimbal_yaw.wait_remote_ms = now - wait_start_ms;
     gimbal_yaw_reason_t reason = GIMBAL_REASON_NONE;
     if (gimbal_yaw_enable != 1U) { reason = GIMBAL_REASON_DISABLED; }
-    else if (gimbal_yaw.interlock_block_reason & ~GIMBAL_BLOCK_REMOTE) { reason = GIMBAL_REASON_INTERLOCK; }
     else if (zero_encoder != yaw_probe_zero_encoder || angle_direction != yaw_probe_direction ||
              (waiting_request >= 3U && waiting_direction != gimbal_yaw_output_direction) ||
              (waiting_request == 3U && waiting_offset != gimbal_yaw_offset_deg) ||
@@ -381,14 +457,16 @@ static void wait_remote(uint32_t now, int interlock)
                                        waiting_speed_ms != gimbal_yaw_speed_ms)) ||
              (waiting_request <= 2U && (waiting_pulse_raw != gimbal_yaw_pulse_raw ||
                                         waiting_pulse_ms != gimbal_yaw_pulse_ms))) { reason = GIMBAL_REASON_CALIBRATION; }
-    else if (gimbal_yaw.wait_remote_ms >= GIMBAL_YAW_REMOTE_WAIT_MS) { reason = GIMBAL_REASON_REMOTE_TIMEOUT; }
+    else if (gimbal_yaw.wait_remote_ms >= GIMBAL_YAW_REMOTE_WAIT_MS) { ++gimbal_yaw.feedback_warnings; }
     if (reason != GIMBAL_REASON_NONE) {
         gimbal_yaw.state = GIMBAL_FAULT;
+        gyro_control.turning = 0U;
+        gimbal_yaw.angle_integral_sum = 0.0f;
         gimbal_yaw.reason = reason;
         waiting_request = 0;
         return;
     }
-    if (!interlock || gimbal_yaw.interlock_block_reason) { remote_stable = 0; return; }
+    if (!interlock) { remote_stable = 0; return; }
     if (!remote_stable) { ready_start_ms = now; remote_stable = 1; }
     if ((uint32_t)(now - ready_start_ms) < GIMBAL_YAW_REMOTE_STABLE_MS) { return; }
     uint32_t original_blocks = gimbal_yaw.start_block_reason;
@@ -404,7 +482,20 @@ static void update_control(uint32_t now, int interlock)
 {
     uint32_t elapsed = now - previous_ms;
     previous_ms = now;
-    gimbal_yaw.actual_deg = yaw_probe.continuous_deg;
+    if (!elapsed || elapsed > CHASSIS_MAX_PERIOD_MS) {
+        ++gimbal_yaw.period_errors;
+        elapsed = CHASSIS_CONTROL_MS;
+    }
+    record_feedback(now);
+    int gyro_feedback = Gimbal_Yaw_OwnsBus() ? gimbal_yaw.gyro_mode : Car_IsGyroMode(car.car_mode);
+    gimbal_yaw.actual_deg = gyro_feedback && gyro_control.valid ? gyro_control.continuous_deg : yaw_probe.continuous_deg;
+    if (gimbal_yaw.gyro_mode && gyro_control.generation != gimbal_yaw.imu_generation) {
+        gimbal_yaw.imu_generation = gyro_control.generation;
+        gimbal_yaw.target_deg = gimbal_yaw.goal_deg = gimbal_yaw.actual_deg;
+        gimbal_yaw.angle_integral_sum = gimbal_yaw.speed_integral_raw = 0.0f;
+        gyro_control.turning = 0U;
+        ++gimbal_yaw.reference_rebases;
+    }
     uint32_t request = gimbal_yaw_request;
     gimbal_yaw_request = 0;
     if (gimbal_yaw.request == 5U && Gimbal_Yaw_OwnsBus() && remote_source != car.car_ctrl) {
@@ -422,29 +513,32 @@ static void update_control(uint32_t now, int interlock)
     }
     record_drive_feedback(now);
     if (gimbal_yaw.state != GIMBAL_STOPPING) {
+        int invalid_calibration = yaw_probe_zero_encoder >= YAW_PROBE_ENCODER_COUNTS ||
+            (yaw_probe_direction != 1 && yaw_probe_direction != -1) ||
+            (gimbal_yaw.request >= 3U && gimbal_yaw_output_direction != 1 && gimbal_yaw_output_direction != -1) ||
+            (gimbal_yaw.request == 5U && !gimbal_yaw.gyro_mode && gimbal_yaw_angle_enable > 1U);
+        if (invalid_calibration) ++gimbal_yaw.invalid_requests;
         if (gimbal_yaw_enable != 1U || (gimbal_yaw.request == 5U && gimbal_yaw_remote_enable != 1U)) {
             stop(GIMBAL_REASON_DISABLED, now);
         }
         else if (!interlock) { stop(GIMBAL_REASON_INTERLOCK, now); }
-        else if (!feedback_ready(now, gimbal_yaw.state == GIMBAL_ZEROING)) { stop(GIMBAL_REASON_FEEDBACK, now); }
-        else if (elapsed > CHASSIS_MAX_PERIOD_MS) { stop(GIMBAL_REASON_PERIOD, now); }
-        else if (zero_encoder != yaw_probe_zero_encoder || angle_direction != yaw_probe_direction ||
+        else if (gimbal_yaw.request == 5U && (gimbal_yaw.gyro_mode ? !Car_IsGyroMode(car.car_mode) : car.car_mode != mec_car)) { stop(GIMBAL_REASON_CALIBRATION, now); }
+        else if (motor_fault()) { stop(GIMBAL_REASON_FEEDBACK, now); }
+        else if (!invalid_calibration && (zero_encoder != yaw_probe_zero_encoder || angle_direction != yaw_probe_direction ||
                  (gimbal_yaw.request >= 3U && output_direction != gimbal_yaw_output_direction) ||
-                 (gimbal_yaw.request == 5U && gimbal_yaw.angle_control != gimbal_yaw_angle_enable)) {
+                 (gimbal_yaw.request == 5U && !gimbal_yaw.gyro_mode && gimbal_yaw.angle_control != gimbal_yaw_angle_enable))) {
             stop(GIMBAL_REASON_CALIBRATION, now);
         }
     }
     if (gimbal_yaw.state == GIMBAL_STOPPING) {
         gimbal_yaw.current_raw = 0;
-        if (gimbal_yaw.zero_confirmed >= GIMBAL_YAW_ZERO_CONFIRM_COUNT && zero_reply(now)) {
-            gimbal_yaw.last_delta_deg = gimbal_yaw.actual_deg - gimbal_yaw.start_deg;
-            gimbal_yaw.state = gimbal_yaw.reason == GIMBAL_REASON_COMPLETE ||
-                gimbal_yaw.reason == GIMBAL_REASON_DISABLED ? GIMBAL_DONE : GIMBAL_FAULT;
-        } else if ((uint32_t)(now - phase_ms) >= GIMBAL_YAW_STOP_WARN_MS) { gimbal_yaw.stop_unconfirmed = 1; }
+        gimbal_yaw.last_delta_deg = gimbal_yaw.actual_deg - gimbal_yaw.start_deg;
+        gimbal_yaw.state = gimbal_yaw.reason == GIMBAL_REASON_COMPLETE ||
+            gimbal_yaw.reason == GIMBAL_REASON_DISABLED ? GIMBAL_DONE : GIMBAL_FAULT;
         return;
     }
     if (gimbal_yaw.state == GIMBAL_ZEROING) {
-        if (gimbal_yaw.zero_confirmed && zero_reply(now)) {
+        if (gimbal_yaw.zero_confirmed) {
             gimbal_yaw.state = gimbal_yaw.request == 5U ? GIMBAL_REMOTE : gimbal_yaw.request == 4U ? GIMBAL_SPEED :
                 (gimbal_yaw.request == 3U ? GIMBAL_HOLD : GIMBAL_PULSE);
             if (gimbal_yaw.request == 5U && gimbal_yaw.angle_control) {
@@ -455,7 +549,10 @@ static void update_control(uint32_t now, int interlock)
                 sample_deg = gimbal_yaw.actual_deg;
             }
             phase_ms = now;
-        } else if ((uint32_t)(now - phase_ms) >= GIMBAL_YAW_ZEROING_MS) { stop(GIMBAL_REASON_ZERO_TIMEOUT, now); }
+        } else if ((uint32_t)(now - phase_ms) >= GIMBAL_YAW_ZEROING_MS) {
+            ++gimbal_yaw.zero_timeouts;
+            phase_ms = now;
+        }
         return;
     }
     update_speed();
@@ -468,17 +565,32 @@ static void update_control(uint32_t now, int interlock)
     if (gimbal_yaw.state == GIMBAL_SPEED) {
         speed_guard = fmaxf(speed_guard, fabsf(gimbal_yaw.speed_setpoint_dps) + GIMBAL_YAW_TEST_SPEED_MARGIN_DPS);
     } else if (gimbal_yaw.state == GIMBAL_REMOTE) {
-        speed_guard = fmaxf(speed_guard, GIMBAL_YAW_CONTROL_MAX_SPEED_DPS + GIMBAL_YAW_TEST_SPEED_MARGIN_DPS);
+        speed_guard = fmaxf(speed_guard, (gimbal_yaw.gyro_mode ? GYRO_YAW_MAX_SPEED_DPS : GIMBAL_YAW_CONTROL_MAX_SPEED_DPS) + GIMBAL_YAW_TEST_SPEED_MARGIN_DPS);
     }
-    if (fabsf(gimbal_yaw.speed_estimate_dps) > speed_guard ||
-        abs(yaw_probe.feedback.status.speed_dps) > speed_guard) { stop(GIMBAL_REASON_SPEED, now); return; }
+    gimbal_yaw.overspeed_limit_dps = speed_guard;
+    int speed_fresh = gimbal_yaw.gyro_mode && gyro_control.valid ? Gyro_Ready(now) && gimbal_yaw.imu_age_ms <= GIMBAL_YAW_FEEDBACK_MS :
+        yaw_probe.feedback.state_frames && gimbal_yaw.feedback_age_ms <= GIMBAL_YAW_FEEDBACK_MS;
+    int overspeed = (speed_fresh && fabsf(gimbal_yaw.speed_estimate_dps) > speed_guard) ||
+        (yaw_probe.feedback.state_frames && gimbal_yaw.feedback_age_ms <= GIMBAL_YAW_FEEDBACK_MS &&
+         abs(yaw_probe.feedback.status.speed_dps) > speed_guard);
+    if (overspeed) {
+        ++gimbal_yaw.overspeed_samples;
+        if (now - overspeed_check_ms > GIMBAL_YAW_FEEDBACK_MS) overspeed_active = 0U;
+        if (!overspeed_active) { overspeed_active = 1U; overspeed_started_ms = now; }
+        gimbal_yaw.overspeed_ms = now - overspeed_started_ms;
+        if (gimbal_yaw.overspeed_ms >= GIMBAL_YAW_OVERSPEED_MS) {
+            ++gimbal_yaw.overspeed_trips;
+            stop(GIMBAL_REASON_SPEED, now); return;
+        }
+    } else { overspeed_active = 0U; gimbal_yaw.overspeed_ms = 0U; }
+    overspeed_check_ms = now;
     gimbal_yaw.active_ms = now - phase_ms;
     if (gimbal_yaw.duration_ms && gimbal_yaw.active_ms >= gimbal_yaw.duration_ms) {
         stop(GIMBAL_REASON_COMPLETE, now); return;
     }
     if (gimbal_yaw.state == GIMBAL_PULSE) {
         gimbal_yaw.current_raw = gimbal_yaw.request == 1U ? gimbal_yaw.pulse_raw : -gimbal_yaw.pulse_raw;
-    } else if (gimbal_yaw.state == GIMBAL_REMOTE) { remote_control(elapsed); }
+    } else if (gimbal_yaw.state == GIMBAL_REMOTE) { remote_control(now, elapsed); }
     else if (gimbal_yaw.state == GIMBAL_SPEED) {
         gimbal_yaw.speed_target_dps = gimbal_yaw.speed_setpoint_dps;
         speed_control(elapsed);
@@ -505,9 +617,11 @@ void Gimbal_Init(void)
     yaw_scope_target_dps = yaw_scope_speed_dps = 0;
     yaw_scope_current_raw = yaw_scope_integral_raw = 0;
     yaw_scope_angle_target_deg = yaw_scope_angle_actual_deg = yaw_scope_angle_error_deg = 0;
+    yaw_scope_angle_kp = 0.0f;
     yaw_scope_state = GIMBAL_IDLE;
+    overspeed_started_ms = overspeed_check_ms = overspeed_active = 0U;
     phase_ms = previous_ms = last_tx_ms = sample_frames = sample_ms = 0;
-    zero_baseline = zero_encoder = 0;
+    zero_encoder = 0;
     angle_direction = output_direction = 0;
     sample_deg = 0;
     tx_started = zero_sent = 0;
@@ -522,14 +636,54 @@ void Gimbal_Init(void)
     settle_streak_ms = 0;
     waiting_speed = waiting_kp = waiting_ki = 0;
     waiting_speed_ms = 0;
-    remote_off_seen = 0;
+    remote_source = RC_CTRL; turn_ms = last_keys = wheel_up_seen = 0U;
+}
+
+/** @brief 清除已停机的Yaw会话，保留参数与发送统计，重新建立机械角参考。 */
+static void standby_reset(uint32_t now)
+{
+    gimbal_yaw = (gimbal_yaw_t){.tx_queued = gimbal_yaw.tx_queued, .tx_confirmed = gimbal_yaw.tx_confirmed,
+        .tx_errors = gimbal_yaw.tx_errors, .nonzero_confirmed = gimbal_yaw.nonzero_confirmed,
+        .feedback_warnings = gimbal_yaw.feedback_warnings, .period_errors = gimbal_yaw.period_errors,
+        .invalid_requests = gimbal_yaw.invalid_requests, .zero_timeouts = gimbal_yaw.zero_timeouts,
+        .restart_attempts = gimbal_yaw.restart_attempts, .reference_rebases = gimbal_yaw.reference_rebases,
+        .overspeed_samples = gimbal_yaw.overspeed_samples, .overspeed_trips = gimbal_yaw.overspeed_trips};
+    gimbal_yaw_request = 0U;
+    gimbal_yaw_offset_deg = gimbal_yaw_speed_dps = 0.0f;
+    phase_ms = previous_ms = now;
+    last_tx_ms = sample_frames = sample_ms = zero_encoder = 0U;
+    angle_direction = output_direction = waiting_direction = 0;
+    sample_deg = waiting_offset = waiting_speed = waiting_kp = waiting_ki = 0.0f;
+    tx_started = zero_sent = remote_stable = drive_started = wheel_up_seen = 0U;
+    waiting_request = wait_start_ms = ready_start_ms = drive_reply_baseline = waiting_pulse_ms = 0U;
+    waiting_pulse_raw = 0;
+    settle_streak_ms = waiting_speed_ms = turn_ms = last_keys = 0U;
     remote_source = RC_CTRL;
+    yaw_probe_angle_reset = 1U;
+    gyro_control.fault = gyro_control.turning = 0U;
+    yaw_scope_target_dps = yaw_scope_current_raw = yaw_scope_integral_raw = 0.0f;
+    yaw_scope_angle_target_deg = yaw_scope_angle_error_deg = 0.0f;
+    yaw_scope_angle_kp = 0.0f;
+    yaw_scope_state = GIMBAL_IDLE;
+}
+
+/** @brief 遥控离线立即清除软件会话，零电流由驱动持续发送，不等待ACK。 */
+void Gimbal_Yaw_RequestStandby(uint32_t now)
+{
+    standby_reset(now);
+}
+
+/** @brief 报告软件已回待命，不证明电机收到或执行零电流。 */
+int Gimbal_Yaw_StandbyReady(void)
+{
+    return !gimbal_yaw.standby_pending && gimbal_yaw.state == GIMBAL_IDLE;
 }
 
 /** @brief 更新控制并发布角度、速度和电流标量镜像，便于J-Scope采集。 */
 void Gimbal_Yaw_Update(uint32_t now, int interlock)
 {
     update_control(now, interlock);
+    if (gimbal_yaw.standby_pending && !Gimbal_Yaw_OwnsBus()) standby_reset(now);
     yaw_scope_target_dps = gimbal_yaw.state == GIMBAL_HOLD || gimbal_yaw.state == GIMBAL_SPEED ||
         gimbal_yaw.state == GIMBAL_REMOTE ?
         gimbal_yaw.speed_target_dps : 0;
@@ -538,7 +692,10 @@ void Gimbal_Yaw_Update(uint32_t now, int interlock)
     yaw_scope_integral_raw = gimbal_yaw.speed_integral_raw;
     yaw_scope_angle_target_deg = gimbal_yaw.target_deg;
     yaw_scope_angle_actual_deg = gimbal_yaw.actual_deg;
-    yaw_scope_angle_error_deg = gimbal_yaw.target_deg - gimbal_yaw.actual_deg;
+    yaw_scope_angle_error_deg = gimbal_yaw.state == GIMBAL_REMOTE && gimbal_yaw.gyro_mode ? gimbal_yaw.error_deg :
+        gimbal_yaw.gyro_mode ? remainderf(gimbal_yaw.target_deg - gimbal_yaw.actual_deg, 360.0f) :
+        gimbal_yaw.target_deg - gimbal_yaw.actual_deg;
+    yaw_scope_angle_kp = gimbal_yaw.angle_effective_kp;
     yaw_scope_state = gimbal_yaw.state;
 }
 
@@ -565,10 +722,8 @@ int Gimbal_Yaw_NeedsZero(void)
 /** @brief 限频生成电流帧；点动/闭环插入错误状态查询，清零阶段仅发零电流。 */
 int Gimbal_Yaw_MakeCommand(uint32_t now, uint8_t out[8])
 {
-    if (!Gimbal_Yaw_OwnsBus()) { return 0; }
     if (tx_started && (uint32_t)(now - last_tx_ms) < GIMBAL_YAW_TX_MS) { return 0; }
-    if (!Gimbal_Yaw_NeedsZero() &&
-        gimbal_yaw.tx_queued % GIMBAL_YAW_STATUS_DIVIDER == GIMBAL_YAW_STATUS_DIVIDER - 1U) {
+    if (gimbal_yaw.tx_queued % GIMBAL_YAW_STATUS_DIVIDER == GIMBAL_YAW_STATUS_DIVIDER - 1U) {
         return KT_Yaw_BuildRead(YAW_PROBE_STATE1, out);
     }
     int16_t current = Gimbal_Yaw_NeedsZero() ? 0 : gimbal_yaw.current_raw;
@@ -586,7 +741,6 @@ void Gimbal_Yaw_Queued(uint32_t now, int16_t current, uint8_t command)
         if (abs(current) > abs(gimbal_yaw.peak_command_raw)) { gimbal_yaw.peak_command_raw = current; }
     }
     if (Gimbal_Yaw_NeedsZero() && command == GIMBAL_YAW_TORQUE_COMMAND && !current && !zero_sent) {
-        zero_baseline = yaw_probe.feedback.torque_frames;
         zero_sent = 1;
     }
 }
@@ -602,9 +756,9 @@ void Gimbal_Yaw_TxComplete(int16_t current, uint8_t command, int success)
     }
 }
 
-/** @brief 发送异常时锁定退出原因，持续尝试零输出。 */
+/** @brief 发送异常只记录，不改变会话，下一调度周期继续尝试。 */
 void Gimbal_Yaw_TxError(void)
 {
     ++gimbal_yaw.tx_errors;
-    if (Gimbal_Yaw_OwnsBus()) { stop(GIMBAL_REASON_CAN, previous_ms); }
+
 }

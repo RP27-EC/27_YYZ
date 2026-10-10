@@ -9,14 +9,14 @@
 
 /* Private typedef -----------------------------------------------------------*/
 typedef struct {
-    int64_t accumulated_counts; /**< 本段连续角累计计数，已应用方向符号。 */
-    uint32_t last_frames;       /**< 上次处理的状态2计数，用于识别丢样。 */
-    uint32_t last_ms;           /**< 上次状态2时刻，毫秒。 */
-    uint32_t zero_encoder;      /**< 本段使用的暂定零点。 */
-    int32_t direction;         /**< 本段使用的方向符号。 */
-    uint16_t last_encoder;     /**< 上次处理的编码器计数。 */
-    uint8_t started;            /**< 是否曾建立角度跟踪。 */
-    uint8_t valid;              /**< 本段累计计数是否连续有效。 */
+    int64_t accumulated_counts;     /**< 本段连续角累计计数，已应用方向符号。 */
+    uint32_t last_frames;           /**< 上次处理的状态2计数，用于识别丢样。 */
+    uint32_t last_ms;               /**< 上次状态2时刻，毫秒。 */
+    uint32_t zero_encoder;          /**< 本段使用的暂定零点。 */
+    int32_t direction;              /**< 本段使用的方向符号。 */
+    uint16_t last_encoder;          /**< 上次处理的编码器计数。 */
+    uint8_t started;                /**< 是否曾建立角度跟踪。 */
+    uint8_t valid;                  /**< 本段累计计数是否连续有效。 */
 } yaw_angle_track_t;
 
 /* Private variables ---------------------------------------------------------*/
@@ -27,11 +27,11 @@ static uint8_t query_started;            /**< 当前启用期间是否已成功�
 static uint8_t query_allowed;            /**< 本周期是否已通过独立许可检查。 */
 
 /* Exported variables --------------------------------------------------------*/
-yaw_probe_t yaw_probe;                   /**< 任务侧反馈和查询诊断对象。 */
-volatile uint32_t yaw_probe_enable = GIMBAL_YAW_BOOT_PROBE_ENABLE; /**< 配置默认反馈查询开关。 */
-volatile uint32_t yaw_probe_zero_encoder = YAW_PROBE_ZERO_ENCODER; /**< 暂定正前计数。 */
-volatile int32_t yaw_probe_direction = YAW_PROBE_DIRECTION; /**< 俯视逆时针为正。 */
-volatile uint32_t yaw_probe_angle_reset = 0; /**< 手动重建连续角请求。 */
+yaw_probe_t yaw_probe;                                                  /**< 任务侧反馈和查询诊断对象。 */
+volatile uint32_t yaw_probe_enable = GIMBAL_YAW_BOOT_PROBE_ENABLE;      /**< 配置默认反馈查询开关。 */
+volatile uint32_t yaw_probe_zero_encoder = YAW_PROBE_ZERO_ENCODER;      /**< 暂定正前计数。 */
+volatile int32_t yaw_probe_direction = YAW_PROBE_DIRECTION;             /**< 俯视逆时针为正。 */
+volatile uint32_t yaw_probe_angle_reset = 0;                            /**< 手动重建连续角请求。 */
 
 /* Private functions ---------------------------------------------------------*/
 /** @brief 将一圈内编码器差值映射到[-32768,32768)计数。 */
@@ -42,21 +42,19 @@ static int32_t wrap_counts(int32_t counts)
     return counts;
 }
 
-/** @brief 发布相对角，逐帧累计最短角差；跟踪中断后保留失效标志。 */
+/** @brief 发布合法端点的最短角差，丢样记诊断；非法角度舍去并继续等待。 */
 static void update_angles(void)
 {
     uint32_t zero = yaw_probe_zero_encoder;
     int32_t direction = yaw_probe_direction;
-    yaw_probe.angle_valid = yaw_probe.online && zero < YAW_PROBE_ENCODER_COUNTS &&
-        (direction == 1 || direction == -1);
-    if (!yaw_probe.angle_valid) {
-        angle_track.valid = 0;
-        yaw_probe.continuous_valid = 0;
+    if (zero >= YAW_PROBE_ENCODER_COUNTS || (direction != 1 && direction != -1)) {
+        ++yaw_probe.invalid_parameters;
         return;
     }
+    if (!yaw_probe.online) { ++yaw_probe.stale_samples; return; }
+    yaw_probe.angle_valid = 1U;
     uint16_t encoder = yaw_probe.feedback.status.encoder;
     int32_t relative = wrap_counts(direction * ((int32_t)encoder - (int32_t)zero));
-    yaw_probe.relative_deg = relative * (360.0f / YAW_PROBE_ENCODER_COUNTS);
     if (!angle_track.started || yaw_probe_angle_reset == 1U ||
         angle_track.zero_encoder != zero || angle_track.direction != direction) {
         angle_track.accumulated_counts = relative;
@@ -66,16 +64,18 @@ static void update_angles(void)
         yaw_probe_angle_reset = 0;
     } else if (angle_track.last_frames != yaw_probe.feedback.state_frames) {
         int32_t delta = wrap_counts((int32_t)encoder - angle_track.last_encoder);
-        if ((uint32_t)(yaw_probe.feedback.state_frames - angle_track.last_frames) != 1U ||
-            (uint32_t)(yaw_probe.feedback.last_state_ms - angle_track.last_ms) > YAW_PROBE_OFFLINE_MS ||
-            delta == -YAW_PROBE_HALF_COUNTS) {
-            angle_track.valid = 0;
-        }
-        if (angle_track.valid) { angle_track.accumulated_counts += direction * delta; }
+        uint32_t samples = yaw_probe.feedback.state_frames - angle_track.last_frames;
+        if (samples > 1U) yaw_probe.skipped_samples += samples - 1U;
+        if (delta == -YAW_PROBE_HALF_COUNTS) {
+            ++yaw_probe.ambiguous_samples;
+            return;
+        } else { angle_track.accumulated_counts += direction * delta; }
+        angle_track.valid = 1U;
     }
     angle_track.last_encoder = encoder;
     angle_track.last_frames = yaw_probe.feedback.state_frames;
     angle_track.last_ms = yaw_probe.feedback.last_state_ms;
+    yaw_probe.relative_deg = relative * (360.0f / YAW_PROBE_ENCODER_COUNTS);
     yaw_probe.continuous_deg = angle_track.accumulated_counts * (360.0f / YAW_PROBE_ENCODER_COUNTS);
     yaw_probe.continuous_valid = angle_track.valid;
 }

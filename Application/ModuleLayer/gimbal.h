@@ -36,7 +36,7 @@ typedef struct {
     gimbal_yaw_state_t state; /**< 当前状态。 */
     gimbal_yaw_reason_t reason; /**< 最近退出或启动拒绝原因。 */
     uint32_t request;         /**< 本次会话：1正点动、2负点动、3角度、4独立速度、5遥控自动启动。 */
-    uint32_t interlock_block_reason; /**< 本周期启动条件故障位，可按位相加。 */
+    uint32_t interlock_block_reason; /**< 原联锁条件诊断位；非零本身不再禁止控制，输入源变化位仍用于退出。 */
     uint32_t start_block_reason; /**< 最近一次请求开始检查时的故障位快照。 */
     uint32_t exit_block_reason; /**< 最近会话因条件失效退出时的故障位快照。 */
     uint32_t wait_remote_ms;   /**< 本次启动等待已用时间，毫秒；结束后保留。 */
@@ -56,24 +56,36 @@ typedef struct {
     int16_t peak_current_raw; /**< 运动阶段A1反馈电流绝对值最大的一次快照，保留符号。 */
     int16_t peak_speed_dps;   /**< 运动阶段A1反馈速度绝对值最大的一次快照，度/秒。 */
     float start_deg;          /**< 本次测试起始连续角，度。 */
-    float actual_deg;         /**< 本周期实际连续角，度。 */
+    float actual_deg;         /**< 本周期机械连续角或陀螺仪IMU连续角，度。 */
     float target_deg;         /**< 连续目标角，度；独立角度经斜坡，遥控角度按输入累计。 */
     float goal_deg;           /**< 最终目标角，度；遥控角度与target_deg同步。 */
     float error_deg;          /**< 目标减实际角度，度。 */
     float speed_target_dps;   /**< 当前角度/独立速度/遥控速度环目标，度/秒。 */
-    float speed_estimate_dps; /**< 连续编码器差分得到的滤波速度，度/秒。 */
+    float speed_estimate_dps; /**< 机械模式编码器差分滤波速度，陀螺仪模式上板IMU速度，度/秒。 */
     float speed_integral_raw; /**< 速度环积分输出，原始电流值；停止后清零。 */
     float speed_setpoint_dps; /**< 请求4锁存目标或遥控/键鼠实时目标，度/秒。 */
     float speed_kp;           /**< 本轮锁存的速度Kp，原始值/(度/秒)。 */
     float speed_ki;           /**< 本轮锁存的速度Ki，原始值/度。 */
+    uint8_t gyro_mode; /**< 本次使用上板IMU世界角和速度，机械模式为0。 */
+    uint32_t imu_generation, car_session; /**< 本次IMU连续参考及整车启动代次。 */
+    float angle_integral_sum; /**< 陀螺仪外环逐周期角误差累计，度乘次数。 */
+    uint32_t turn_count; /**< 换头请求接受次数，默认每次目标增加180度。 */
+    uint32_t turn_completed, turn_timeouts; /**< 换头到位及等待超时次数；超时不清除目标或失能。 */
     uint32_t angle_control;   /**< 本轮遥控是否启用角度外环，0直接速度/1角度串级。 */
     float angle_kp;           /**< 本轮角度外环Kp，1/秒。 */
+    float angle_effective_kp; /**< 本周期角度外环实际Kp，1/秒；机械遥控随误差变化。 */
     float control_end_deg;    /**< 转入停止清零之前的连续角，度，结束后保留。 */
     float control_end_error_deg; /**< 转入停止时最终目标减实际角，度，结束后保留。 */
     float last_delta_deg;     /**< 上次退出时相对起点位移，度，用于方向确认。 */
     int16_t current_raw;      /**< 当前拟发送电流指令，不是安培。 */
     uint8_t tx_pending;       /**< 运动帧尚在发送/取消队列。 */
     uint8_t stop_unconfirmed; /**< 停止等待超过阈值仍未确认，继续零输出。 */
+    uint8_t standby_pending; /**< 遥控离线后的零输出确认尚未完成。 */
+    uint32_t feedback_age_ms, error_age_ms, imu_age_ms; /**< 最后有效反馈、错误状态和IMU年龄，毫秒。 */
+    uint32_t feedback_warnings, period_errors, invalid_requests; /**< 数据过期、周期异常和丢弃非法请求的观察次数。 */
+    uint32_t zero_timeouts, restart_attempts, reference_rebases; /**< 清零重试超时、自动启动及参考重建次数。 */
+    uint32_t overspeed_ms, overspeed_samples, overspeed_trips; /**< 连续新鲜反馈超速时长毫秒、超速观察和停机次数。 */
+    float overspeed_limit_dps; /**< 本次超速判断上限，度/秒；持续超限停机后等待有效反馈恢复。 */
 } gimbal_yaw_t;
 
 /* Exported variables --------------------------------------------------------*/
@@ -97,11 +109,16 @@ extern volatile float yaw_scope_integral_raw; /**< J-Scope只读镜像：速度�
 extern volatile float yaw_scope_angle_target_deg; /**< J-Scope只读镜像：目标连续角，度。 */
 extern volatile float yaw_scope_angle_actual_deg; /**< J-Scope只读镜像：实际连续角，度。 */
 extern volatile float yaw_scope_angle_error_deg; /**< J-Scope只读镜像：目标减实际连续角，度。 */
+extern volatile float yaw_scope_angle_kp; /**< J-Scope只读镜像：本周期角度外环实际Kp，1/秒。 */
 extern volatile uint32_t yaw_scope_state; /**< J-Scope只读镜像：状态枚举数值。 */
 
 /* Exported functions --------------------------------------------------------*/
 /** @brief 初始化配置默认许可和方向；右拨杆停止档到中档后才启动遥控Yaw。 */
 void Gimbal_Init(void);
+/** @brief 撤销旧请求并立即清除软件会话；驱动继续请求零电流。 */
+void Gimbal_Yaw_RequestStandby(uint32_t now_ms);
+/** @brief 本次离线后的Yaw待命复位是否完成。 */
+int Gimbal_Yaw_StandbyReady(void);
 /** @brief 按入口模式更新控制；整车模式允许底盘与Yaw同时运动。 */
 void Gimbal_Yaw_Update(uint32_t now_ms, int interlock);
 /** @brief 是否处于整车遥控模式，含切换入口后的遥控停止确认阶段。 */
@@ -110,12 +127,12 @@ int Gimbal_Yaw_RemoteMode(void);
 int Gimbal_Yaw_OwnsBus(void);
 /** @brief 当前是否要求撤销已经排队的非零电流命令。 */
 int Gimbal_Yaw_NeedsZero(void);
-/** @brief 构造到期0xA1帧；点动/闭环低频插入0x9A查询，成功返回1。 */
+/** @brief 构造到期0xA1帧；失能时也持续零电流，低频插入0x9A查询。 */
 int Gimbal_Yaw_MakeCommand(uint32_t now_ms, uint8_t out[8]);
 /** @brief 记录一次实际成功入队的运动帧，含电流与时刻。 */
 void Gimbal_Yaw_Queued(uint32_t now_ms, int16_t current, uint8_t command);
-/** @brief 记录控制器发送完成结果，失败进入优先清零状态。 */
+/** @brief 记录实际TXOK；发送失败仅记录并继续重试。 */
 void Gimbal_Yaw_TxComplete(int16_t current, uint8_t command, int success);
-/** @brief 记录发送/取消错误并请求停止。 */
+/** @brief 只记录发送/取消错误，不改变运动许可或状态。 */
 void Gimbal_Yaw_TxError(void);
 #endif

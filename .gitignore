@@ -92,12 +92,15 @@ Desktop.ini
 # test files and scripts
 /tests/
 /scripts/
+/diagnostics/
 
 # reference about ioc
 /reference/
 
 # docs 
 /docs/
+README.md
+AGENTS.md
 
 # drivers
 /Drivers/STM32F4xx_HAL_Driver/
@@ -108,3 +111,6 @@ STM32H723VG_FLASH.ld
 
 # backup files
 _encoding_backup/
+
+# jscope
+a.jscope

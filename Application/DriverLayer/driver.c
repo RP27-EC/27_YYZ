@@ -16,6 +16,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "driver.h"
 #include "drv_pitch.h"
+#include "drv_fric.h"
 
 /* Exported functions --------------------------------------------------------*/
 
@@ -24,4 +25,5 @@ void DRIVER_Init(void)
 {
 	CAN_Filter_Init();
     Drv_Pitch_Init();
+    Drv_Fric_Init(HAL_GetTick());
 }

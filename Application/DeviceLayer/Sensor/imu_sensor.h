@@ -1,3 +1,7 @@
+/**
+ * @file    imu_sensor.h
+ * @brief   IMU姿态采集、校准状态及丢弃原始采样的诊断接口。
+ */
 #ifndef __IMU_H
 #define __IMU_H
 
@@ -120,6 +124,7 @@ typedef struct imu_struct {
 } imu_sensor_t;
 
 extern imu_sensor_t imu_sensor;
+extern volatile uint32_t imu_sample_rejects; /**< 原始采样丢弃次数，不终止后续更新。 */
 
 /* Exported functions --------------------------------------------------------*/
 

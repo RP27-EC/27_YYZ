@@ -98,6 +98,8 @@ Desktop.ini
 
 # docs 
 /docs/
+AGENTS.md
+README.md
 
 # drivers
 /Drivers/STM32F4xx_HAL_Driver/
@@ -108,3 +110,6 @@ STM32H723VG_FLASH.ld
 
 # backup files
 _encoding_backup/
+
+# jscope
+pitch.jscope

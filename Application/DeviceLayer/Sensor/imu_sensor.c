@@ -6,6 +6,7 @@
 #include "imu_sensor.h"
 #include "drv_gpio.h"
 #include "drv_tick.h"
+#include <math.h>
 
 #if IMU_USE_EKF == 1
 #include "bmi_EKF.h"
@@ -57,6 +58,7 @@ imu_sensor_t imu_sensor = {
 };
 
 /* Exported functions --------------------------------------------------------*/
+volatile uint32_t imu_sample_rejects; /**< 传输、全零及非有限原始采样丢弃次数。 */
 float imu_read[3];
 uint8_t init_cnt = 200;
 /**
@@ -158,7 +160,7 @@ static int16_t imu_cnt = 0;
 static float imu_dt;
 static uint32_t imu_tick_now, imu_tick_last;
 #endif
-/** @brief 校验原始采样后更新国赛坐标的姿态、角速度和零偏校准状态。 */
+/** @brief 校验原始采样后更新坐标的姿态、角速度和零偏校准状态。 */
 void imu_update(imu_sensor_t *imu_sen)
 {
 
@@ -166,13 +168,22 @@ void imu_update(imu_sensor_t *imu_sen)
 	
 	/* 获取陀螺仪数据 */
     BMI088_read(gyro, accel, &temp);
-    if (!BMI088_read_valid) {
+    if (!BMI088_read_valid || !isfinite(temp) ||
+        !isfinite(accel[0]) || !isfinite(accel[1]) || !isfinite(accel[2]) ||
+        !isfinite(gyro[0]) || !isfinite(gyro[1]) || !isfinite(gyro[2]) ||
+        (accel[0] == 0.0f && accel[1] == 0.0f && accel[2] == 0.0f &&
+         gyro[0] == 0.0f && gyro[1] == 0.0f && gyro[2] == 0.0f)) {
+        ++imu_sample_rejects;
+        BMI088_read_valid = 0U;
         imu_sen->work_state.err_code = IMU_DATA_ERR;
         imu_sen->work_state.dev_state = DEV_OFFLINE;
-        imu_sen->work_state.cali_end = 0U;
+        if (imu_sen->work_state.err_cnt < 100U) ++imu_sen->work_state.err_cnt;
         return;
     }
-	
+    imu_sen->work_state.err_code = imu_sen->work_state.cali_end ? IMU_NONE_ERR : IMU_DATA_CALI;
+    imu_sen->work_state.dev_state = DEV_ONLINE;
+    imu_sen->work_state.err_cnt = 0U;
+
 	imu_info->raw_info.acc_x = accel[0];
 	imu_info->raw_info.acc_y = accel[1];
 	imu_info->raw_info.acc_z = accel[2];
@@ -280,19 +291,6 @@ void imu_update(imu_sensor_t *imu_sen)
 	
 	imu_sen->work_state.offline_cnt = 0;
 	
-	/* imu读取数据判断  */
-	if ((accel[0] == 0) && (accel[1] == 0) && (accel[2] == 0) \
-		 && (gyro[0] == 0) && (gyro[1] == 0) && (gyro[2]== 0))
-	{
-		if(++imu_sen->work_state.err_cnt >= 100)
-		{
-			imu_sen->work_state.dev_state = DEV_OFFLINE;
-			imu_sen->work_state.err_code = IMU_DATA_ERR;
-			imu_sen->work_state.offline_cnt = imu_sen->work_state.offline_max_cnt;
-			imu_sen->work_state.err_cnt = 100;
-		}
-	}
-
     /* imu获取温度 */
     imu_info->base_info.temperature = temp;
 

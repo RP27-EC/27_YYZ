@@ -1,6 +1,9 @@
 # Application and CMSIS-DSP sources mirrored from MDK-ARM/My_C.uvprojx.
 # Keep explicit sources: some Application files are not part of the down firmware.
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
+    Application/ModuleLayer/fric.c
+    Application/DriverLayer/drv_fric.c
+    Application/ProtocolLayer/board_fric_protocol.c
     Application/ModuleLayer/gimbal_pitch.c
     Application/DriverLayer/drv_pitch.c
     Application/ProtocolLayer/board_pitch_protocol.c

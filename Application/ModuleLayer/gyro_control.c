@@ -13,6 +13,8 @@ gyro_control_t gyro_control;                                                    
 gyro_rx_diag_t gyro_rx_diag;                                                         /**< 解码后IMU到达和拒绝原因计数。 */
 volatile int32_t gyro_yaw_angle_direction = GYRO_YAW_ANGLE_DIRECTION;                /**< IMU角度符号。 */
 volatile int32_t gyro_yaw_speed_direction = GYRO_YAW_SPEED_DIRECTION;                /**< IMU速度符号。 */
+volatile uint32_t gyro_chassis_follow_disable = GYRO_CHASSIS_FOLLOW_DISABLE;          /**< 普通陀螺仪遥控底盘跟随关闭开关，只有1开启。 */
+volatile uint32_t gyro_yaw_speed_only_enable = GYRO_YAW_SPEED_ONLY_ENABLE;            /**< 普通陀螺仪遥控Yaw速度单环开关，只有1开启。 */
 /* Exported functions --------------------------------------------------------*/
 /** @brief 重置IMU接收参考与方向。 */
 void Gyro_Init(void)
@@ -23,6 +25,8 @@ void Gyro_Init(void)
     gyro_scope_imu_ready = 0U;
     gyro_yaw_angle_direction = GYRO_YAW_ANGLE_DIRECTION;
     gyro_yaw_speed_direction = GYRO_YAW_SPEED_DIRECTION;
+    gyro_chassis_follow_disable = GYRO_CHASSIS_FOLLOW_DISABLE;
+    gyro_yaw_speed_only_enable = GYRO_YAW_SPEED_ONLY_ENABLE;
 }
 /** @brief 清除运动故障、转向和姿态参考，保留方向配置及接收诊断。 */
 void Gyro_StandbyReset(void)

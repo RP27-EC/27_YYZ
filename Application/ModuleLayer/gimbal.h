@@ -67,6 +67,9 @@ typedef struct {
     float speed_kp;           /**< 本轮锁存的速度Kp，原始值/(度/秒)。 */
     float speed_ki;           /**< 本轮锁存的速度Ki，原始值/度。 */
     uint8_t gyro_mode; /**< 本次使用上板IMU世界角和速度，机械模式为0。 */
+    uint8_t chassis_steer; /**< 本次机械右杆/鼠标X控制底盘，Yaw强制角度双环保持车头/车尾。 */
+    uint8_t rear_facing; /**< 机械转底盘模式的保持方向：0车头，1车尾；遥控待命复位清零。 */
+    float chassis_hold_target_deg; /**< 机械转底盘模式的连续保持角目标，度；与标定正前零位对应。 */
     uint32_t imu_generation, car_session; /**< 本次IMU连续参考及整车启动代次。 */
     float angle_integral_sum; /**< 陀螺仪外环逐周期角误差累计，度乘次数。 */
     uint32_t turn_count; /**< 换头请求接受次数，默认每次目标增加180度。 */
@@ -92,7 +95,7 @@ typedef struct {
 extern gimbal_yaw_t gimbal_yaw; /**< Watch中的Yaw控制状态。 */
 extern volatile uint32_t gimbal_yaw_enable; /**< Yaw输出许可，默认1，只有1有效。 */
 extern volatile uint32_t gimbal_yaw_remote_enable; /**< 遥控/键鼠入口，默认1；关闭后可使用独立测试。 */
-extern volatile uint32_t gimbal_yaw_angle_enable; /**< 遥控角度外环许可，默认配置1；运行中改变会退出。 */
+extern volatile uint32_t gimbal_yaw_angle_enable; /**< 机械Yaw配置选择，1双环、0速度单环；右杆/鼠标转底盘强制双环，其余切换后清零重启。 */
 extern volatile uint32_t gimbal_yaw_request; /**< 一次触发请求，处理后清0。 */
 extern volatile float gimbal_yaw_offset_deg; /**< 请求3的目标改变量，允许[-5,5]度。 */
 extern volatile int32_t gimbal_yaw_output_direction; /**< 已验证电流方向，默认1，闭环需±1。 */

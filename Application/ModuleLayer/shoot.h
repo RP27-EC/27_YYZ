@@ -1,5 +1,5 @@
 /** @file shoot.h
- * @brief 英雄国赛遥控/键鼠发射输入和RM拨弹状态机。
+ * @brief 英雄遥控/键鼠发射输入和RM拨弹状态机。
  */
 #ifndef DOWN_SHOOT_H
 #define DOWN_SHOOT_H

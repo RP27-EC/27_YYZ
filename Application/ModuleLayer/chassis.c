@@ -1,6 +1,6 @@
 /**
  * @file    chassis.c
- * @brief   麦轮平移、跟随/小陀螺解算及四轮速度控制，右杆ch0交给Yaw。
+ * @brief   麦轮平移、可选机械遥控/键鼠转向、跟随/小陀螺解算及四轮速度控制。
  */
 
 /* Includes ------------------------------------------------------------------*/
@@ -9,12 +9,14 @@
 #include "rc_sensor.h"
 #include "RM_motor.h"
 #include "gyro_control.h"
+#include "gimbal_config.h"
 #include <math.h>
 
 /* Private variables ---------------------------------------------------------*/
 static uint32_t key_ms[4]; /**< W/S/A/D独立按住时长，毫秒。 */
 
 /* Exported variables --------------------------------------------------------*/
+volatile uint32_t chassis_manual_rotation_enable = GIMBAL_YAW_CHASSIS_STEER_ENABLE; /**< 机械遥控右杆/鼠标X转底盘共用开关，只有1开启。 */
 chassis_t chassis = { /**< 四轮指针和控制函数构成的底盘对象。 */
     .chassisLF = &rm_motor[CHAS_LF], .chassisLB = &rm_motor[CHAS_LB],
     .chassisRF = &rm_motor[CHAS_RF], .chassisRB = &rm_motor[CHAS_RB],
@@ -25,8 +27,16 @@ chassis_t chassis = { /**< 四轮指针和控制函数构成的底盘对象。 *
 /** @brief 重置底盘目标和输出快照。 */
 void Chassis_Init(void)
 {
+    chassis_manual_rotation_enable = GIMBAL_YAW_CHASSIS_STEER_ENABLE;
     chassis.base_info = (chassis_base_info_t){0};
     for (unsigned i = 0; i < 4U; ++i) key_ms[i] = 0U;
+}
+
+/** @brief 机械遥控右杆与键鼠X共用转底盘开关，世界角模式保留原输入。 */
+int Chassis_ManualRotation(void)
+{
+    return chassis_manual_rotation_enable == 1U && car.car_mode == mec_car &&
+        (car.car_ctrl == RC_CTRL || car.car_ctrl == KEY_CTRL);
 }
 
 /** @brief 按麦轮安装方向合成四轮目标转速并等比例限幅，单位转子RPM。 */
@@ -80,16 +90,26 @@ void Chassis_Work(chassis_t *c)
         c->base_info.target_front_speed = ((keys & RC_KEY_W ? 1 : 0) - (keys & RC_KEY_S ? 1 : 0)) * speed;
         c->base_info.target_right_speed = ((keys & RC_KEY_D ? 1 : 0) - (keys & RC_KEY_A ? 1 : 0)) * speed;
         c->base_info.target_cycle_speed = 0;
+        if (Chassis_ManualRotation() && !(keys & RC_KEY_CTRL)) {
+            float limit = fminf(GIMBAL_YAW_CHASSIS_STEER_MAX_RPM, CHASSIS_MAX_SPEED);
+            float rotation = GIMBAL_YAW_CHASSIS_STEER_DIRECTION * rc_sensor.info->mouse_vx * GIMBAL_YAW_CHASSIS_STEER_MOUSE_GAIN;
+            c->base_info.target_cycle_speed = fmaxf(-limit, fminf(rotation, limit));
+        }
     } else {
         c->base_info.target_front_speed = stick(rc_sensor.info->ch3);
         c->base_info.target_right_speed = stick(rc_sensor.info->ch2);
         c->base_info.target_cycle_speed = CHASSIS_RC_ROTATION_ENABLE ? stick(rc_sensor.info->ch0) : 0;
+        if (Chassis_ManualRotation()) {
+            c->base_info.target_cycle_speed = GIMBAL_YAW_CHASSIS_STEER_DIRECTION * stick(rc_sensor.info->ch0) *
+                (fminf(GIMBAL_YAW_CHASSIS_STEER_MAX_RPM, CHASSIS_MAX_SPEED) / CHASSIS_MAX_SPEED);
+        }
     }
     if (Car_IsGyroMode(car.car_mode)) {
         Gyro_Transform(c->base_info.target_front_speed, c->base_info.target_right_speed, gyro_control.mechanical_deg,
             &c->base_info.target_front_speed, &c->base_info.target_right_speed);
         c->base_info.target_cycle_speed = car.car_mode == cycle_car ? GYRO_CYCLE_SPEED_RPM :
-            (gyro_control.turning ? 0.0f : Gyro_Follow(gyro_control.mechanical_deg));
+            (gyro_control.turning || (car.car_ctrl == RC_CTRL && gyro_chassis_follow_disable == 1U) ?
+             0.0f : Gyro_Follow(gyro_control.mechanical_deg));
     }
     float targets[CHAS_MOTOR_COUNT];
     Chassis_Mix(c->base_info.target_front_speed, c->base_info.target_right_speed,

@@ -9,6 +9,7 @@
 #include "kt_yaw_protocol.h"
 #include "chassis_config.h"
 #include "carctrl.h"
+#include "chassis.h"
 #include "gyro_control.h"
 #include "rc_sensor.h"
 #include <math.h>
@@ -52,7 +53,7 @@ static car_ctrl_e remote_source; /**< 本轮遥控或键鼠输入来源，途中
 gimbal_yaw_t gimbal_yaw; /**< Yaw控制观察对象。 */
 volatile uint32_t gimbal_yaw_enable = GIMBAL_YAW_BOOT_OUTPUT_ENABLE; /**< 配置默认Yaw许可。 */
 volatile uint32_t gimbal_yaw_remote_enable = GIMBAL_YAW_REMOTE_BOOT_ENABLE; /**< 配置默认遥控/键鼠入口。 */
-volatile uint32_t gimbal_yaw_angle_enable = GIMBAL_YAW_CONTROL_ANGLE_ENABLE; /**< 配置默认遥控角度外环。 */
+volatile uint32_t gimbal_yaw_angle_enable = GIMBAL_YAW_CONTROL_ANGLE_ENABLE; /**< 机械Yaw环路选择：1双环、0速度单环；陀螺仪调试另用gyro_yaw_speed_only_enable。 */
 volatile uint32_t gimbal_yaw_request = 0; /**< 一次触发请求。 */
 volatile float gimbal_yaw_offset_deg = 0; /**< 闭环目标改变量，度。 */
 volatile int32_t gimbal_yaw_output_direction = GIMBAL_YAW_OUTPUT_DIRECTION; /**< 已实测确认的电流方向。 */
@@ -75,6 +76,18 @@ static float clamp(float value, float lower, float upper)
     if (value > upper) { return upper; }
     if (value < lower) { return lower; }
     return value;
+}
+
+/** @brief 机械右杆转底盘时强制角度外环，否则沿用双环/速度单环选择。 */
+static uint32_t mechanical_angle_control(void)
+{
+    return Chassis_ManualRotation() ? 1U : gimbal_yaw_angle_enable;
+}
+
+/** @brief 速度单环调试只在普通陀螺仪遥控模式开启，继续使用IMU速度反馈。 */
+static int gyro_speed_only(void)
+{
+    return gyro_yaw_speed_only_enable == 1U && car.car_mode == gyro_car && car.car_ctrl == RC_CTRL;
 }
 
 /** @brief 采样年龄只记录；已上报的电机内部错误保留停机判据。 */
@@ -209,7 +222,7 @@ static gimbal_yaw_reason_t request_reason(uint32_t request, float offset, int32_
         return GIMBAL_REASON_REQUEST;
     }
     if (request == 5U && (gimbal_yaw_angle_enable > 1U ||
-        (gimbal_yaw_angle_enable && (!isfinite(GIMBAL_YAW_CONTROL_ANGLE_KP) || GIMBAL_YAW_CONTROL_ANGLE_KP < 0 ||
+        (mechanical_angle_control() && (!isfinite(GIMBAL_YAW_CONTROL_ANGLE_KP) || GIMBAL_YAW_CONTROL_ANGLE_KP < 0 ||
          !isfinite(GIMBAL_YAW_CONTROL_ANGLE_RATE_DPS) || GIMBAL_YAW_CONTROL_ANGLE_RATE_DPS <= 0)))) {
         return GIMBAL_REASON_REQUEST;
     }
@@ -266,6 +279,7 @@ static void begin(uint32_t request, uint32_t now, int interlock)
         return;
     }
     gimbal_yaw.gyro_mode = request == 5U && Car_IsGyroMode(car.car_mode);
+    gimbal_yaw.chassis_steer = request == 5U && Chassis_ManualRotation();
     gimbal_yaw.imu_generation = gyro_control.generation;
     gimbal_yaw.car_session = car.sessions;
     gimbal_yaw.angle_integral_sum = 0.0f;
@@ -293,7 +307,7 @@ static void begin(uint32_t request, uint32_t now, int interlock)
         request == 4U ? gimbal_yaw_speed_kp : GIMBAL_YAW_SPEED_KP;
     gimbal_yaw.speed_ki = request == 5U ? GIMBAL_YAW_CONTROL_SPEED_KI :
         request == 4U ? gimbal_yaw_speed_ki : GIMBAL_YAW_SPEED_KI;
-    gimbal_yaw.angle_control = request == 5U ? gimbal_yaw_angle_enable : 0U;
+    gimbal_yaw.angle_control = request == 5U ? mechanical_angle_control() : 0U;
     gimbal_yaw.angle_kp = request == 5U ? GIMBAL_YAW_CONTROL_ANGLE_KP : GIMBAL_YAW_ANGLE_KP;
     gimbal_yaw.control_end_deg = gimbal_yaw.control_end_error_deg = 0;
     gimbal_yaw.best_settled_ms = settle_streak_ms = 0;
@@ -311,7 +325,7 @@ static void begin(uint32_t request, uint32_t now, int interlock)
     if (request == 5U) {
         remote_source = car.car_ctrl;
         if (gimbal_yaw.gyro_mode) {
-            gimbal_yaw.angle_control = 1U; gimbal_yaw.angle_kp = GYRO_YAW_ANGLE_KP;
+            gimbal_yaw.angle_control = !gyro_speed_only(); gimbal_yaw.angle_kp = GYRO_YAW_ANGLE_KP;
             gimbal_yaw.speed_kp = GYRO_YAW_SPEED_KP; gimbal_yaw.speed_ki = GYRO_YAW_SPEED_KI;
         }
     }
@@ -340,6 +354,7 @@ static void remote_start(uint32_t now, int interlock)
 static float remote_input_rate(void)
 {
     const rc_sensor_info_t *rc = rc_sensor.info;
+    if (gimbal_yaw.chassis_steer) return 0.0f;
     if (gimbal_yaw.gyro_mode) {
         return remote_source == KEY_CTRL ? GYRO_MOUSE_YAW_GAIN * rc->mouse_x :
             (abs(rc->ch0) > RC_DEADBAND ? GYRO_RC_YAW_GAIN * rc->ch0 : 0.0f);
@@ -405,8 +420,31 @@ static void turn_update(uint32_t now)
 static void remote_control(uint32_t now, uint32_t elapsed)
 {
     float rate = remote_input_rate();
+    if (gimbal_yaw.gyro_mode) {
+        uint32_t angle_control = !gyro_speed_only();
+        if (gimbal_yaw.angle_control != angle_control) {
+            gimbal_yaw.angle_control = angle_control;
+            gimbal_yaw.target_deg = gimbal_yaw.goal_deg = gimbal_yaw.actual_deg;
+            gimbal_yaw.error_deg = gimbal_yaw.angle_integral_sum = gimbal_yaw.speed_integral_raw = 0.0f;
+            gyro_control.turning = 0U;
+            last_keys = rc_sensor.info->key_v; wheel_up_seen = 0U;
+        }
+        if (!angle_control) {
+            last_keys = rc_sensor.info->key_v; wheel_up_seen = 0U; gyro_control.turning = 0U;
+            gimbal_yaw.target_deg = gimbal_yaw.goal_deg = gimbal_yaw.actual_deg;
+            gimbal_yaw.error_deg = gimbal_yaw.angle_integral_sum = gimbal_yaw.angle_effective_kp = 0.0f;
+            gimbal_yaw.speed_target_dps = clamp(rate, -GYRO_YAW_MAX_SPEED_DPS, GYRO_YAW_MAX_SPEED_DPS);
+            gimbal_yaw.speed_setpoint_dps = gimbal_yaw.speed_target_dps;
+            speed_control(elapsed);
+            return;
+        }
+    }
     if (turn_requested(rc_sensor.info)) {
-        gimbal_yaw.target_deg += GYRO_TURN_ANGLE_DEG;
+        if (gimbal_yaw.chassis_steer) {
+            gimbal_yaw.chassis_hold_target_deg += copysignf(180.0f, GYRO_TURN_ANGLE_DEG);
+            gimbal_yaw.rear_facing ^= 1U;
+            gimbal_yaw.target_deg = gimbal_yaw.chassis_hold_target_deg;
+        } else { gimbal_yaw.target_deg += GYRO_TURN_ANGLE_DEG; }
         gyro_control.turning = 1U; turn_ms = now; ++gimbal_yaw.turn_count;
     }
     if (gimbal_yaw.gyro_mode) {
@@ -426,7 +464,9 @@ static void remote_control(uint32_t now, uint32_t elapsed)
         return;
     }
     if (gimbal_yaw.angle_control || gyro_control.turning) {
-        if (!gyro_control.turning && remote_source == KEY_CTRL && (rc_sensor.info->key_v & RC_KEY_CTRL)) {
+        if (gimbal_yaw.chassis_steer) {
+            gimbal_yaw.target_deg = gimbal_yaw.chassis_hold_target_deg;
+        } else if (!gyro_control.turning && remote_source == KEY_CTRL && (rc_sensor.info->key_v & RC_KEY_CTRL)) {
             gimbal_yaw.target_deg = gimbal_yaw.actual_deg;
             gimbal_yaw.speed_integral_raw = 0;
         } else if (!gyro_control.turning || remote_source == KEY_CTRL) {
@@ -526,7 +566,9 @@ static void update_control(uint32_t now, int interlock)
         else if (motor_fault()) { stop(GIMBAL_REASON_FEEDBACK, now); }
         else if (!invalid_calibration && (zero_encoder != yaw_probe_zero_encoder || angle_direction != yaw_probe_direction ||
                  (gimbal_yaw.request >= 3U && output_direction != gimbal_yaw_output_direction) ||
-                 (gimbal_yaw.request == 5U && !gimbal_yaw.gyro_mode && gimbal_yaw.angle_control != gimbal_yaw_angle_enable))) {
+                 (gimbal_yaw.request == 5U && !gimbal_yaw.gyro_mode &&
+                  (gimbal_yaw.angle_control != mechanical_angle_control() ||
+                   gimbal_yaw.chassis_steer != Chassis_ManualRotation())))) {
             stop(GIMBAL_REASON_CALIBRATION, now);
         }
     }
@@ -543,7 +585,13 @@ static void update_control(uint32_t now, int interlock)
                 (gimbal_yaw.request == 3U ? GIMBAL_HOLD : GIMBAL_PULSE);
             if (gimbal_yaw.request == 5U && gimbal_yaw.angle_control) {
                 gimbal_yaw.start_deg = gimbal_yaw.target_deg = gimbal_yaw.goal_deg = gimbal_yaw.actual_deg;
-                gimbal_yaw.error_deg = 0;
+                if (gimbal_yaw.chassis_steer) {
+                    float heading = gimbal_yaw.rear_facing ? 180.0f : 0.0f;
+                    gimbal_yaw.chassis_hold_target_deg = gimbal_yaw.actual_deg +
+                        remainderf(heading - gimbal_yaw.actual_deg, 360.0f);
+                    gimbal_yaw.target_deg = gimbal_yaw.goal_deg = gimbal_yaw.chassis_hold_target_deg;
+                }
+                gimbal_yaw.error_deg = gimbal_yaw.target_deg - gimbal_yaw.actual_deg;
                 sample_frames = yaw_probe.feedback.state_frames;
                 sample_ms = yaw_probe.feedback.last_state_ms;
                 sample_deg = gimbal_yaw.actual_deg;

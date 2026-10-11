@@ -29,6 +29,8 @@ extern gyro_control_t gyro_control;                                             
 extern gyro_rx_diag_t gyro_rx_diag;                                                         /**< IMU接收判断诊断，不参与控制。 */
 extern volatile int32_t gyro_yaw_angle_direction;                                           /**< 上板Yaw角方向，±1；停止时调整。 */
 extern volatile int32_t gyro_yaw_speed_direction;                                           /**< 上板Yaw速度方向，±1；停止时调整。 */
+extern volatile uint32_t gyro_chassis_follow_disable;                                      /**< 普通陀螺仪遥控时1关闭底盘跟随，默认取配置；不影响平移。 */
+extern volatile uint32_t gyro_yaw_speed_only_enable;                                       /**< 普通陀螺仪遥控时1速度单环，0双环；键鼠和小陀螺始终双环。 */
 /* Exported functions --------------------------------------------------------*/
 /** @brief 清除姿态租约及连续参考，恢复配置默认方向。 */
 void Gyro_Init(void);

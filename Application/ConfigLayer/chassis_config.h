@@ -23,7 +23,7 @@ enum { RC_SW_UP = 1, RC_SW_DOWN = 2, RC_SW_MID = 3 };
 #ifndef CHASSIS_MAX_CURRENT
 #define CHASSIS_MAX_CURRENT 8000.0f         /**< 四轮电调电流指令上限，原始CAN值，不是安培。 */
 #endif
-#define CHASSIS_KEY_SPEED 1000.0f           /**< WASD目标轮速限幅，电机转子RPM。 */
+#define CHASSIS_KEY_SPEED CHASSIS_MAX_SPEED /**< 机械WASD平移上限，与遥控满杆一致，电机转子RPM。 */
 #define CHASSIS_OFFLINE_MS 300U             /**< 遥控和四轮最后合法反馈超时，毫秒。 */
 #define CHASSIS_CONTROL_MS 2U               /**< 控制周期，毫秒。 */
 #define CHASSIS_MAX_PERIOD_MS 20U           /**< 控制周期异常保护上限，毫秒。 */
